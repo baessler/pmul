@@ -57,12 +57,14 @@ def init_arguments(conf):
 
     conf['local_addr'] = '127.0.0.1'
     if args.bind is not None:
-        conf['local_addr'] = '127.0.0.1'
+        conf['local_addr'] = args.bind
 
     conf['destination'] = '127.0.0.1'
     if args.destination is None:
         parser.print_help()
         exit()
+    else:
+        conf['destination'] = args.destination
 
     conf['mcast_addr'] = '225.0.0.1'
     if args.multicast is not None:
