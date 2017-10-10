@@ -2,24 +2,22 @@
 
 import sys
 sys.path.append("../")
-sys.path.append("../subprojects/")
-from pmul import Pmul
-from pmul import Observer
+import pmul
 import asyncio
 
-class Server(Observer):
-    def __init__(self, loop):
-        self.loop = loop
+class ServerProtocol(pmul.PmulProtocol):
+    def __init__(self, conf):
+        self.__conf = conf
 
-    def message_received(self, message, from_addr):
-        print('CLI: received message of len {} from {}'.format(len(message), from_addr))
+    def connection_made(self, transport):
+        self.transport = transport
+        print('P_MUL protocol is ready')
+        
+    def data_received(self, data, addr):
+        print("Received data from {}".format(addr))
 
-    def transmission_finished(self, msid, delivery_status, ack_status):
-        print('CLI: transmission of msid: {} finished with {} {}'.format(msid, delivery_status, ack_status))
-
-    def run(self):
-        self.pmul = Pmul("192.168.2.106", "225.0.0.1", 1, 2740, 2741, loop=self.loop)
-        self.pmul.set_observer(self)
+    def delivery_completed(self, msid, delivery_status, ack_status):
+        print('Delivery of Message-ID {} finished with {} {}'.format(msid, delivery_status, ack_status))
 
 async def forever():
     while True:
@@ -28,12 +26,11 @@ async def forever():
         except KeyboardInterrupt:
             pass
 
-loop = asyncio.get_event_loop()
-
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    srv = Server(loop)
-    srv.run()
+    conf = pmul.conf_init()
+    coro = pmul.create_pmul_endpoint(ServerProtocol, loop, conf);
+    protocol, transport = loop.run_until_complete(coro)
     loop.run_until_complete(forever())
     loop.close()
 

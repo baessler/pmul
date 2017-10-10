@@ -2,51 +2,38 @@
 
 import sys
 sys.path.append("../")
-sys.path.append("../subprojects/")
 import airchannel as chan
-from pmul import Pmul
-from pmul import Observer
+import pmul
 import asyncio
 
-class Executor(Observer):
-    def __init__(self, loop):
-        self.loop = loop
+class UserProtocol(pmul.PmulProtocol):
+    def __init__(self, conf):
+        self.__conf = conf
 
-    def message_received(self, message, from_addr):
-        print('CLI: received message of len {} from {}'.format(len(message), from_addr))
+    def connection_made(self, transport):
+        self.transport = transport
+        print('P_MUL protocol is ready')
+        
+    def data_received(self, data, addr):
+        print("Received data from {}".format(addr))
 
-    def transmission_finished(self, msid, delivery_status, ack_status):
-        print('CLI: transmission of msid: {} finished with {} {}'.format(msid, delivery_status, ack_status))
+    def delivery_completed(self, msid, delivery_status, ack_status):
+        print('Delivery of Message-ID {} finished with {} {}'.format(msid, delivery_status, ack_status))
 
-    async def send_message(self, pmul, dst_addresses, len):
-        await asyncio.sleep(3)
+    async def send(self, dst_addresses, msglen):
         message = 'a';
-        for i in range(0,len):
-            message += 'a'.format(len);
+        for i in range(0,msglen):
+            message += 'a';
         bulk_data = message.encode("ascii")
-        result = await pmul.sendto(bulk_data, dst_addresses)
-        print('CLI: delivery finished with {} {}'.format(result[0], result[1]))
+        print("send a message of len {}".format(msglen))
+        result = await self.transport.sendto(bulk_data, dst_addresses)
+        print('Delivery finished with {} {}'.format(result[0], result[1]))
 
-    async def run(self):
-        # Start channel emulator
-        self.channel = chan.WirelessChannel(self.loop)
-        self.channel.add_link("198.18.10.250", 50000, 10, 20)
-        self.channel.add_link("198.18.20.250", 50000, 10, 20)
-        self.channel.add_link("198.18.30.250", 50000, 10, 20)
-
-        # Create the P_MUL instances
-        self.pmul1 = Pmul("198.18.10.250", "224.0.1.240", 1, 2740, 2741, loop=self.loop, chan_cli_port=8000, chan_srv_port=8001)
-        self.pmul2 = Pmul("198.18.20.250", "224.0.1.240", 1, 2740, 2741, loop=self.loop, chan_cli_port=8002, chan_srv_port=8003)
-        self.pmul3 = Pmul("198.18.30.250", "224.0.1.240", 1, 2740, 2741, loop=self.loop, chan_cli_port=8004, chan_srv_port=8005)
-
-        # Register observer at P_MUL protocol
-        self.pmul1.set_observer(self)
-        self.pmul2.set_observer(self)
-        self.pmul3.set_observer(self)
-
-        # Send message to group
-        for i in range(0,2):
-            await self.send_message(self.pmul1, ['198.18.20.250','198.18.30.250'], 50000)
+    async def run(self, dests, msglen, iterations):
+        for i in range(0,iterations):
+            await self.send(dests, msglen)
+            print("finished delivery of message")
+        print("finished message transmission")
         
 async def forever():
     while True:
@@ -57,8 +44,35 @@ async def forever():
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    executor = Executor(loop)
-    loop.run_until_complete(executor.run())
+    conf = pmul.conf_init()
+
+    channel = chan.WirelessChannel(loop)
+    channel.add_link("198.18.10.250", 25000, 10, 20)
+    channel.add_link("198.18.20.250", 25000, 10, 20)
+    channel.add_link("198.18.30.250", 25000, 10, 20)
+
+    # Radio 1
+    conf["src_ipaddr"] = "198.18.10.250"
+    conf["chan_cli_port"] = 8000
+    conf["chan_srv_port"] = 8001
+    coro = pmul.create_pmul_endpoint(UserProtocol, loop, conf);
+    protocol1, transport1 = loop.run_until_complete(coro)
+
+    # Radio 2
+    conf["src_ipaddr"] = "198.18.20.250"
+    conf["chan_cli_port"] = 8002
+    conf["chan_srv_port"] = 8003
+    coro = pmul.create_pmul_endpoint(UserProtocol, loop, conf);
+    protocol2, transport2 = loop.run_until_complete(coro)
+
+    # Radio 3
+    conf["src_ipaddr"] = "198.18.30.250"
+    conf["chan_cli_port"] = 8004
+    conf["chan_srv_port"] = 8005
+    coro = pmul.create_pmul_endpoint(UserProtocol, loop, conf);
+    protocol3, transport3 = loop.run_until_complete(coro)
+
+    loop.run_until_complete(protocol1.run(['198.18.20.250','198.18.30.250'], 10000, 3))
     loop.run_until_complete(forever())
     loop.close()
 

@@ -1932,29 +1932,27 @@ class StatusObserver():
 
 class Client(asyncio.DatagramProtocol, chan.Observer):
     # Constructor
-    def __init__(self, observer, src_ipaddr, mcast_ipaddr, mcast_ipttl, dport, aport, loop = None, channel_port = 0):
+    def __init__(self, loop, observer, conf):
         # The event loop
-        if loop is None:
-            self.loop = asyncio.get_event_loop()
-        else:
-            self.loop = loop
+        self.loop = loop
         self.observer = observer
-        self.src_ipaddr = src_ipaddr
-        self.mcast_ipaddr = mcast_ipaddr
-        self.dport = dport
-        self.aport = aport
+        self.src_ipaddr = conf["src_ipaddr"]
+        self.mcast_ipaddr = conf["mcast_ipaddr"]
+        self.dport = conf["dport"]
+        self.aport = conf["aport"]
+        self.channel_port = conf["chan_cli_port"]
         self.transport = None
         self.tx_ctx_list = dict()   # List of TX Sessions. Each session has a unique Message ID */
 
-        if channel_port > 0:
-            self.channel = chan.WirelessChannelClient(loop, self, src_ipaddr, aport, channel_port)
+        if self.channel_port > 0:
+            self.channel = chan.WirelessChannelClient(loop, self, self.src_ipaddr, self.aport, self.channel_port)
         else:
             self.channel = None
             # Create socket
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            log.error('socket listens to port {}'.format(aport))
-            self.sock.bind((src_ipaddr, aport))
+            log.error('socket listens to port {}'.format(self.aport))
+            self.sock.bind((self.src_ipaddr, self.aport))
             #mreq = struct.pack("=4sl", socket.inet_aton(mcast_ipaddr), socket.INADDR_ANY)
             #self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
             self.task = asyncio.ensure_future(self.start())
@@ -1991,7 +1989,7 @@ class Client(asyncio.DatagramProtocol, chan.Observer):
         coro = self.loop.create_datagram_endpoint(lambda: self, sock=self.sock)
         await asyncio.wait_for(coro, 2)
 
-    async def _send(self, message, dst_addresses, traffic_type, future):
+    async def _send(self, message, dst_addresses, traffic_type, node_info, future):
         # For unicast communication we use the unicast IP address
         if len(dst_addresses) == 1:
             dstip = dst_addresses[0]
@@ -2009,8 +2007,8 @@ class Client(asyncio.DatagramProtocol, chan.Observer):
         for i,val in enumerate(dst_addresses):
             entry = dict()
             entry['addr'] = val
-            if val in self.observer.node_info:
-                node_info = self.observer.node_info[val]
+            if val in node_info:
+                node_info = node_info[val]
                 entry['air_datarate'] = node_info['air_datarate']
                 entry['ack_timeout'] = node_info['ack_timeout']
                 entry['retry_timeout'] = node_info['retry_timeout']
@@ -2041,11 +2039,11 @@ class Client(asyncio.DatagramProtocol, chan.Observer):
         await ctx.dispatch(event)
         return msid
 
-    async def send_message(self, message, dst_addresses, future=None):
-        return await self._send(message, dst_addresses, Traffic.Message, future);
+    async def send_message(self, message, dst_addresses, node_info, future=None):
+        (message, dst_addresses, Traffic.Message, node_info, future);
 
-    async def send_bulk(self, message, dst_addresses, future=None):
-        return await self._send(message, dst_addresses, Traffic.Bulk, future);
+    async def send_bulk(self, message, dst_addresses, node_info, future=None):
+        return await self._send(message, dst_addresses, Traffic.Bulk, node_info, future);
 
     def _on_ack_pdu(self, data, remote): 
         ack_pdu = AckPdu()
@@ -2712,30 +2710,27 @@ class RxContext():
             pass
 
 class Server(asyncio.DatagramProtocol, chan.Observer):
-    # Constructor
-    def __init__(self, observer, src_ipaddr, mcast_ipaddr, mcast_ipttl, dport, aport, loop = None, channel_port = 0):
-        # The event loop
-        if loop is None:
-            self.loop = asyncio.get_event_loop()
-        else:
-            self.loop = loop
+
+    def __init__(self, loop, observer, conf):
+        self.loop = loop
         self.observer = observer
-        self.src_id = socket.inet_aton(src_ipaddr)
-        self.src_ipaddr = src_ipaddr
-        self.mcast_ipaddr = mcast_ipaddr
-        self.dport = dport
-        self.aport = aport
+        self.src_id = socket.inet_aton(conf["src_ipaddr"])
+        self.src_ipaddr = conf["src_ipaddr"]
+        self.mcast_ipaddr = conf["mcast_ipaddr"]
+        self.dport = conf["dport"]
+        self.aport = conf["aport"]
+        self.channel_port = conf["chan_srv_port"]
         self.rx_contexts = dict()
 
-        if channel_port > 0:
-            self.channel = chan.WirelessChannelClient(loop, self, src_ipaddr, dport, channel_port)
+        if self.channel_port > 0:
+            self.channel = chan.WirelessChannelClient(loop, self, self.src_ipaddr, self.dport, self.channel_port)
         else:
             self.channel = None
             # Create socket
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            log.debug('socket listens to port {}'.format(dport))
-            self.sock.bind(('', dport))
+            log.debug('socket listens to port {}'.format(self.dport))
+            self.sock.bind(('', self.dport))
             #mreq = struct.pack("=4sl", socket.inet_aton(mcast_ipaddr), socket.INADDR_ANY)
             #self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
             self.task = asyncio.ensure_future(self.start())
@@ -2865,61 +2860,60 @@ class Server(asyncio.DatagramProtocol, chan.Observer):
 #
 #
 
-# Observer class. User can register an object of this class to get asynchronous
-# indications from the P_MUL protocol.
-class Observer():
-    # Indicates the reception of a message via AIR
-    def message_received(self, message, from_addr):
-        log.debug('received message of len {} from {}'.format(len(message), from_addr))
+class PmulTransport(StatusObserver):
 
-    # Indicates that a transmission has finished
-    def transmission_finished(self, msid, delivery_status, ack_status):
-        log.debug('transmission of msid: {} finished with {} {}'.format(msid, delivery_status, ack_status))
+    def __init__(self, loop, proto, conf):
+        self.__loop = loop                    # loop to process
+        self.__proto = proto                  # Creator
 
-# The P_MUL Protocol instance
-class Pmul(StatusObserver):
-    def __init__(self, src_ipaddr, mcast_ipaddr, mcast_ttl, dport, aport, loop = None, chan_cli_port = 0, chan_srv_port = 0):
-        if loop is None:
-            self.loop = asyncio.get_event_loop()
-        else:
-            self.loop = loop
-        self.src_ipaddr = src_ipaddr        # IPv4 Source address
-        self.mcast_ipaddr = mcast_ipaddr    # IPv4 Multicast address
-        self.dport = dport                  # UDP Port for sending data
-        self.aport = aport                  # UDP Port for sending ACKs
-        self.mcast_ttl = mcast_ttl          # IPv4 TTL value used for multicast communication
-        self.observer = None                # The registered observer
-        self.min_bulk_size = 512            # If a message exceeds this size, it will be sent as bulk data
-        #self.probe = probepoint.Logger(self.src_ipaddr)
+        self.__conf = conf_init()
+        # IP address to bind
+        if conf["src_ipaddr"] is not None:
+            self.__conf["src_ipaddr"] = conf["src_ipaddr"]
+        # Multicast address used for data communication
+        if conf["mcast_ipaddr"] is not None:
+            self.__conf["mcast_ipaddr"] = conf["mcast_ipaddr"]
+        # Multicast TTL value used for data communication
+        if conf["mcast_ttl"] is not None:
+            self.__conf["mcast_ttl"] = conf["mcast_ttl"]
+        # UDP Port for sending data packets
+        if conf["dport"] is not None:
+            self.__conf["dport"] = conf["dport"]
+        # UDP Port for sending ACK packets
+        if conf["aport"] is not None:
+            self.__conf["aport"] = conf["aport"]
+        # Channel Emulation - UDP client port
+        if conf["chan_cli_port"] is not None:
+            self.__conf["chan_cli_port"] = conf["chan_cli_port"]
+        # Channel Emulation - UDP server port
+        if conf["chan_srv_port"] is not None:
+            self.__conf["chan_srv_port"] = conf["chan_srv_port"]
 
-        # P_MUL Client Protocol
-        self.client = Client(self, src_ipaddr, mcast_ipaddr, self.mcast_ttl, dport, aport, loop, chan_cli_port)
-        
-        # P_MUL Server Protocol
-        self.server = Server(self, src_ipaddr, mcast_ipaddr, self.mcast_ttl, dport, aport, loop, chan_srv_port)
-        
+        self.__min_bulk_size = 512            # If a message exceeds this size, it will be sent as bulk data
         # Information about the link-quality to other nodes. This includes:
         # node_info['fragment_size']    := Used fragment size for transmission. Dynamically adjusted based on loss-rate 
         # node_info['loss_rate']        := Average Percentage of lossed datagrams.
         # node_info['air_datarate']     := Measured air datarate of sending datagrams to destination. Used for bulk.
         # node_info['retry_timeout']    := For retry-timeout for single-message transmission
         # node_info['ack_timeout']      := Transmission time of AckPDU (Time between sending Ack and Receiving it)
-        self.node_info = dict()
+        self.__node_info = dict()
+        print("created transport protocol")
 
-    def set_observer(self, observer):
-        self.observer = observer
+        self.__client = Client(loop, self, self.__conf);        
+        self.__server = Server(loop, self, self.__conf);
 
     def message_received(self, message, from_addr):
-        self.observer.message_received(message, from_addr)
+        print("message received")
+        self.__proto.data_received(message, from_addr)
 
     def transmission_finished(self, msid, delivery_status, ack_status):
         for addr,val in ack_status.items():
-            if addr not in self.node_info:
-                self.node_info[addr] = dict()
-                self.node_info[addr]['air_datarate'] = val['air_datarate']
-                self.node_info[addr]['retry_timeout'] = val['retry_timeout']
-                self.node_info[addr]['ack_timeout'] = val['ack_timeout']
-        self.observer.transmission_finished(msid, delivery_status, ack_status)
+            if addr not in self.__node_info:
+                self.__node_info[addr] = dict()
+                self.__node_info[addr]['air_datarate'] = val['air_datarate']
+                self.__node_info[addr]['retry_timeout'] = val['retry_timeout']
+                self.__node_info[addr]['ack_timeout'] = val['ack_timeout']
+        self.__proto.transmission_finished(msid, delivery_status, ack_status)
 
     # Deliver a message to a list of receivers. The function returns the Message-ID
     # of the transmission. User is informed by the transmission_finished() callback
@@ -2932,9 +2926,9 @@ class Pmul(StatusObserver):
     #
     async def sendto_async(self, message_buf, dst_ipaddrs):
         if len(message_buf) < self.min_bulk_size:
-            return await self.client.send_message(message_buf, dst_ipaddrs)
+            return await self.__client.send_message(message_buf, dst_ipaddrs, self.__node_info)
         else:
-            return await self.client.send_bulk(message_buf, dst_ipaddrs)
+            return await self.__client.send_bulk(message_buf, dst_ipaddrs, self.__node_info)
 
     # Deliver a message to a list of receivers. The function blocks until
     # the message delivery has finished. The function will return a tuple
@@ -2947,9 +2941,42 @@ class Pmul(StatusObserver):
     #
     async def sendto(self, message_buf, dst_ipaddrs):
         future = asyncio.Future()
-        if len(message_buf) < self.min_bulk_size:
-            asyncio.ensure_future(self.client.send_message(message_buf, dst_ipaddrs, future=future))
+        if len(message_buf) < self.__min_bulk_size:
+            asyncio.ensure_future(self.__client.send_message(message_buf, dst_ipaddrs, self.__node_info, future=future))
         else:
-            asyncio.ensure_future(self.client.send_bulk(message_buf, dst_ipaddrs, future=future))
+            asyncio.ensure_future(self.__client.send_bulk(message_buf, dst_ipaddrs, self.__node_info, future=future))
         await asyncio.wait([future])
         return future.result()
+
+#
+# The P_MUL Protocol instance - User should derive from this class
+#
+class PmulProtocol():
+    def connection_made(self, transport):
+        log.debug('P_MUL protocol is ready')
+
+    def data_received(self, data, addr):
+        log.debug("Received a data from {}".format(addr))
+
+    def delivery_completed(self, msid, delivery_status, ack_status):
+        log.debug('Delivery of Message-ID {} finished with {} {}'.format(msid, delivery_status, ack_status))
+
+def conf_init():
+    conf = dict()
+    conf["src_ipaddr"]      = '127.0.0.1'
+    conf["mcast_ipaddr"]    = "225.0.0.1"
+    conf["mcast_ttl"]       = 1
+    conf["dport"]           = 2740
+    conf["aport"]           = 2741
+    conf["chan_cli_port"]   = 0      # Optional: Only used for network emulation
+    conf["chan_srv_port"]   = 0      # Optional: Only used for network emulation
+    return conf
+
+async def create_pmul_endpoint(protocol_factory, loop, conf):           
+    protocol = protocol_factory(conf)
+    transport = PmulTransport(loop, protocol, conf)
+    protocol.connection_made(transport)
+    await asyncio.sleep(2)
+    return protocol, transport
+
+
