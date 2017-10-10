@@ -10,42 +10,42 @@ import pmul
 import asyncio
 import argparse
 
-class Client(pmul.Observer):
-    def __init__(self, loop):
-        self.loop = loop
+class ClientProtocol(pmul.PmulProtocol):
+    def __init__(self, conf):
+        self.__conf = conf
 
-    def message_received(self, message, from_addr):
-        print('CLI: received message of len {} from {}'.format(len(message), from_addr))
+    def connection_made(self, transport):
+        self.transport = transport
+        print('P_MUL protocol is ready')
+        
+    def data_received(self, data, addr):
+        print("Received data from {}".format(addr))
 
-    def transmission_finished(self, msid, delivery_status, ack_status):
-        print('CLI: transmission of msid: {} finished with {} {}'.format(msid, delivery_status, ack_status))
+    def delivery_completed(self, msid, delivery_status, ack_status):
+        print('Delivery of Message-ID {} finished with {} {}'.format(msid, delivery_status, ack_status))
+
+    async def sendto(self, dest, len):
+        message = 'a';
+        for i in range(0,len):
+            message += 'a';
+        bulk_data = message.encode("ascii")
+        await self.transport.sendto(bulk_data, [dest])
+        print("Finished delivery of message of len {}".format(len))
 
     async def send_message(self, dst_address, len):
-        await asyncio.sleep(3)
         message = 'a';
         for i in range(0,len):
             message += 'a'.format(len);
         bulk_data = message.encode("ascii")
-        result = await self.pmul.sendto(bulk_data, [dst_address])
-        print('CLI: delivery finished with {} {}'.format(result[0], result[1]))
+        result = await self.transport.sendto(bulk_data, [dst_address])
+        print('Delivery finished with {} {}'.format(result[0], result[1]))
 
-    async def run(self, conf):
-        self.pmul = pmul.Pmul(conf['local_addr'], conf['mcast_addr'], 1, 2740, 2741, loop=self.loop)
-        self.pmul.set_observer(self)
-
-        for i in range(0,conf['num']):
-            print('send message {} of len {} to {}'.format(i, conf['message_len'], conf['destination']))
-            await self.send_message(conf['destination'], conf['message_len'])
-
+    async def run(self):
+        for i in range(0,self.__conf['num']):
+            print('send message {} of len {} to {}'.format(i, self.__conf['message_len'], self.__conf['destination']))
+            await self.send_message(self.__conf['destination'], self.__conf['message_len'])
         print('finished message transmission')
-
-async def forever():
-    while True:
-        try:
-            await asyncio.sleep(1)
-        except KeyboardInterrupt:
-            pass
-
+    
 def init_arguments(conf):
     parser = argparse.ArgumentParser()
     parser.add_argument('-b', '--bind', type=str)
@@ -55,9 +55,8 @@ def init_arguments(conf):
     parser.add_argument('-n', '--num', type=int)
     args = parser.parse_args()
 
-    conf['local_addr'] = '127.0.0.1'
     if args.bind is not None:
-        conf['local_addr'] = args.bind
+        conf['src_ipaddr'] = args.bind
 
     conf['destination'] = '127.0.0.1'
     if args.destination is None:
@@ -66,9 +65,8 @@ def init_arguments(conf):
     else:
         conf['destination'] = args.destination
 
-    conf['mcast_addr'] = '225.0.0.1'
     if args.multicast is not None:
-        conf['mcast_addr'] = args.multicast
+        conf['mcast_ipaddr'] = args.multicast
 
     conf['message_len'] = 5000
     if args.length is not None:
@@ -78,16 +76,12 @@ def init_arguments(conf):
     if args.num is not None:
         conf['num'] = args.num
 
-
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    conf = dict()
+    conf = pmul.conf_init()
     init_arguments(conf)
-    
-    print('client: {}'.format(conf))
 
-    srv = Client(loop)
-    asyncio.ensure_future(srv.run(conf))
-    loop.run_until_complete(forever())
+    coro = pmul.create_pmul_endpoint(ClientProtocol, loop, conf);
+    protocol, transport = loop.run_until_complete(coro)
+    loop.run_until_complete(protocol.run())
     loop.close()
-
