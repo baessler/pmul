@@ -4,6 +4,7 @@ import sys
 sys.path.append("../")
 import pmul
 import asyncio
+import argparse
 
 class ServerProtocol(pmul.PmulProtocol):
     def __init__(self, conf):
@@ -26,9 +27,20 @@ async def forever():
         except KeyboardInterrupt:
             pass
 
+def init_arguments(conf):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-b', '--bind', type=str)
+    args = parser.parse_args()
+    if args.bind is None:
+        parser.print_help()
+        exit()
+    else:
+        conf['src_ipaddr'] = args.bind
+
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     conf = pmul.conf_init()
+    init_arguments(conf)
     coro = pmul.create_pmul_endpoint(ServerProtocol, loop, conf);
     protocol, transport = loop.run_until_complete(coro)
     loop.run_until_complete(forever())
