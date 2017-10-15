@@ -5,7 +5,6 @@ This script creates a P_MUL client which delivers multiple messages to a destina
 """
 
 import sys
-sys.path.append("../")
 import pmul
 import asyncio
 import argparse

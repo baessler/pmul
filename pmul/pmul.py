@@ -12,7 +12,7 @@ import socket
 import struct
 import logging
 import random
-import airchannel as chan
+from . import airchannel as chan
 
 logger = logging.getLogger('pmul')
 fh = logging.FileHandler('pmul.log')
