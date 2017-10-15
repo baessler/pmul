@@ -14,8 +14,12 @@ import logging
 import random
 import airchannel as chan
 
-log = logging.getLogger('pmul')
-log.setLevel(logging.DEBUG)
+#log = logger.getLogger('pmul')
+#logger.setLevel(logger.DEBUG)
+logger = logging.getLogger('pmul')
+fh = logging.FileHandler('pmul.log')
+logger.addHandler(fh)
+logger.setLevel(logging.DEBUG)
 
 ################################################################################
 ## TODOs
@@ -153,13 +157,13 @@ def calc_datarate(ts, bytes):
     msec = timedelta_milli(d)
     if msec > 0:
         datarate = (float)(bytes*8*1000) / msec
-    log.info("RCV | Datarate(): {} Received bytes: {} Interval: {}".format(int(datarate), bytes, msec))
+    logger.info("RCV | Datarate(): {} Received bytes: {} Interval: {}".format(int(datarate), bytes, msec))
     return round(datarate)
 
 # Calculate an average datarate. Weight-Factor: 50%
 def avg_datarate(old, new):
     avg = old * 0.50 + new * 0.50
-    log.info("RCV | Avg_datarate() old: {} bit/s new: {} bit/s avg: {} bit/s".format(old, new, avg))
+    logger.info("RCV | Avg_datarate() old: {} bit/s new: {} bit/s avg: {} bit/s".format(old, new, avg))
     return round(avg)
 
 # Calculate the time period to wait for the remaining bytes
@@ -167,7 +171,7 @@ def calc_remaining_time(remaining_bytes, rx_datarate):
     if rx_datarate == 0:
         rx_datarate = 5000 # just to be sure we have a value here
     msec = 1000.0 * remaining_bytes * 8 / rx_datarate
-    log.info("RCV | Remaining Time {} msec - Payload {} bytes - AirDatarate: {} bit/s".format(round(msec), remaining_bytes, rx_datarate))
+    logger.info("RCV | Remaining Time {} msec - Payload {} bytes - AirDatarate: {} bit/s".format(round(msec), remaining_bytes, rx_datarate))
     return round(msec)
 
 # Convert an integer into a byte
@@ -235,9 +239,9 @@ def unacked_fragments(dest_status_list, fragments, cwnd):
                     curr += len(fragments[i])
                     if curr >= cwnd:
                         # Reached window limit
-                        log.debug("TX unacked_fragments: {} cwnd: {} curr: {}".format(unacked_list, cwnd, curr))
+                        logger.debug("TX unacked_fragments: {} cwnd: {} curr: {}".format(unacked_list, cwnd, curr))
                         return unacked_list
-    log.debug("TX unacked_fragments: {}".format(unacked_list))
+    logger.debug("TX unacked_fragments: {}".format(unacked_list))
     return unacked_list
 
 def get_seqnohi(tx_fragments):
@@ -271,7 +275,7 @@ class Pdu():
     def from_buffer(self, buffer):
         mask = bytes([0x3f])
         if len(buffer) < MINIMUM_PACKET_LEN:
-            log.error('Pdu.from_buffer() FAILED with: Message too small')
+            logger.error('Pdu.from_buffer() FAILED with: Message too small')
             return 0
         unpacked_data = struct.unpack('<Hcc', buffer[:MINIMUM_PACKET_LEN])
         self.len = unpacked_data[0]
@@ -280,9 +284,9 @@ class Pdu():
         return MINIMUM_PACKET_LEN
 
     def log(self, rxtx):
-        log.debug('{}: --- PDU --------------------------------------------------------'.format(rxtx))
-        log.debug('{}: - Len[{}] Prio[{}] Type[{}]'.format(rxtx, self.len, self.priority, self.type))
-        log.debug('{}: ----------------------------------------------------------------'.format(rxtx))
+        logger.debug('{}: --- PDU --------------------------------------------------------'.format(rxtx))
+        logger.debug('{}: - Len[{}] Prio[{}] Type[{}]'.format(rxtx, self.len, self.priority, self.type))
+        logger.debug('{}: ----------------------------------------------------------------'.format(rxtx))
 
 ################################################################################
 ## Destination_Entry class definition
@@ -320,7 +324,7 @@ class DestinationEntry():
 
     def from_buffer(self, buffer):
         if len(buffer) < DESTINATION_ENTRY_LEN:
-            log.error("RX: DestinationEntry.from_buffer() FAILED with: Message to small")
+            logger.error("RX: DestinationEntry.from_buffer() FAILED with: Message to small")
             return 0
         unpacked_data = struct.unpack('<II', buffer[:DESTINATION_ENTRY_LEN])
         self.dest_ipaddr = socket.inet_ntoa(int_to_bytes(unpacked_data[0]))
@@ -423,13 +427,13 @@ class AddressPdu():
         return (32 + DESTINATION_ENTRY_LEN * len(self.dst_entries) + OPT_TS_VAL_LEN + len(self.payload))
 
     def log(self, rxtx):
-        log.debug('{} *** {} *************************************************'.format(rxtx, self.type))
-        log.debug('{} * total:{} wnd:{} seqnohi:{} srcid:{} msid:{} expires:{} rsvlen:{}'.format(
+        logger.debug('{} *** {} *************************************************'.format(rxtx, self.type))
+        logger.debug('{} * total:{} wnd:{} seqnohi:{} srcid:{} msid:{} expires:{} rsvlen:{}'.format(
             rxtx, self.total, self.cwnd, self.seqnohi, self.src_ipaddr, self.msid, self.expires, self.rsvlen))
         for i, val in enumerate(self.dst_entries):
-            log.debug('{} * dst[{}] dstid:{} seqno:{}'.format(rxtx, i, val.dest_ipaddr, val.seqno))
-        log.debug('{} * tsval: {}'.format(rxtx, self.tsval))
-        log.debug('{} ****************************************************************'.format(rxtx))
+            logger.debug('{} * dst[{}] dstid:{} seqno:{}'.format(rxtx, i, val.dest_ipaddr, val.seqno))
+        logger.debug('{} * tsval: {}'.format(rxtx, self.tsval))
+        logger.debug('{} ****************************************************************'.format(rxtx))
 
     def find_addr(self, addr):
         for i,val in enumerate(self.dst_entries):
@@ -489,7 +493,7 @@ class AddressPdu():
 
     def from_buffer(self, buffer):
         if len(buffer) < MINIMUM_ADDRESS_PDU_LEN:
-            log.error("RX: AddressPdu.from_buffer() FAILED with: Message to small")
+            logger.error("RX: AddressPdu.from_buffer() FAILED with: Message to small")
             return 0
         # Read AddressPdu Header 
         unpacked_data = struct.unpack('<HccHHHHHHIIIHH', buffer[:MINIMUM_ADDRESS_PDU_LEN])
@@ -505,24 +509,24 @@ class AddressPdu():
         self.expires = unpacked_data[11]
         total_entries = unpacked_data[12]
         if len(buffer) < offset:
-            log.error("RX: AddressPdu.from_buffer() FAILED with: Message to small")
+            logger.error("RX: AddressPdu.from_buffer() FAILED with: Message to small")
             return 0
         if len(buffer) - MINIMUM_ADDRESS_PDU_LEN < total_entries * DESTINATION_ENTRY_LEN:
-            log.error("RX: AddressPdu.from_buffer() FAILED with: Message to small")
+            logger.error("RX: AddressPdu.from_buffer() FAILED with: Message to small")
             return 0
-        #log.debug("Received AddressPdu with total_length of {}".format(total_entries))
+        #logger.debug("Received AddressPdu with total_length of {}".format(total_entries))
 
         # Read Destination entries
         num_entries = 0
         nbytes = MINIMUM_ADDRESS_PDU_LEN
         while num_entries < total_entries:
             if nbytes + DESTINATION_ENTRY_LEN + reserved_len > offset:
-                log.error("RX: AddressPdu.from_buffer() FAILED with: Invalid DestinationEntry")
+                logger.error("RX: AddressPdu.from_buffer() FAILED with: Invalid DestinationEntry")
                 return 0
             dest_entry = DestinationEntry()
             consumed = dest_entry.from_buffer(buffer[nbytes:])
             if consumed < 0:
-                log.error("RX: AddressPdu.from_buffer() FAILED with: Invalid DestinationEntry")
+                logger.error("RX: AddressPdu.from_buffer() FAILED with: Invalid DestinationEntry")
                 return 0
             nbytes = nbytes + consumed
             num_entries = num_entries + 1
@@ -533,16 +537,16 @@ class AddressPdu():
             type = buffer[nbytes]
             optlen = buffer[nbytes+1]
             if optlen == 0:
-                log.error("RX: AddressPdu.from_buffer() FAILED with: Invalid option TLV")
+                logger.error("RX: AddressPdu.from_buffer() FAILED with: Invalid option TLV")
                 return 0
             if type == int(Option.TsVal):
                 if optlen != 12:
-                    log.error("RX: AddressPdu.from_buffer() FAILED with: Invalid option len of tsVal")
+                    logger.error("RX: AddressPdu.from_buffer() FAILED with: Invalid option len of tsVal")
                     return 0
                 tlv_unpacked = struct.unpack('<ccHQ', buffer[nbytes:nbytes+12])
                 self.tsval = tlv_unpacked[3]
             else:
-                log.info("RX: Ignore unkown option {}".format(type))
+                logger.info("RX: Ignore unkown option {}".format(type))
             nbytes = nbytes + optlen
 
         # Save additional data
@@ -592,10 +596,10 @@ class DataPdu():
         return (DATA_PDU_HDRLEN + len(self.data))
 
     def log(self, rxtx):
-        log.debug('{} *** Data *************************************************'.format(rxtx))
-        log.debug('{} * cwnd:{} seqnohi:{} cwnd_seqno:{} seqno:{} srcid:{} msid:{}'.format(
+        logger.debug('{} *** Data *************************************************'.format(rxtx))
+        logger.debug('{} * cwnd:{} seqnohi:{} cwnd_seqno:{} seqno:{} srcid:{} msid:{}'.format(
             rxtx, self.cwnd, self.seqnohi, self.cwnd_seqno, self.seqno, self.src_ipaddr, self.msid))
-        log.debug('{} ****************************************************************'.format(rxtx))
+        logger.debug('{} ****************************************************************'.format(rxtx))
 
     def to_buffer(self):
         srcid = int_from_bytes(socket.inet_aton(self.src_ipaddr))
@@ -618,7 +622,7 @@ class DataPdu():
 
     def from_buffer(self, buffer):
         if len(buffer) < DATA_PDU_HDRLEN:
-            log.error("RX: DataPdu.from_buffer() FAILED with: Message to small")
+            logger.error("RX: DataPdu.from_buffer() FAILED with: Message to small")
             return 0
         # Read DataPdu Header 
         unpacked_data = struct.unpack('<HccHHHHHHII', buffer[:DATA_PDU_HDRLEN])
@@ -632,13 +636,13 @@ class DataPdu():
         self.src_ipaddr = socket.inet_ntoa(int_to_bytes(unpacked_data[9]))
         self.msid = unpacked_data[10]
         if length < DATA_PDU_HDRLEN:
-            log.error("RX: DataPdu.from_buffer() FAILED with: Invalid length field")
+            logger.error("RX: DataPdu.from_buffer() FAILED with: Invalid length field")
             return 0
         if length > len(buffer):
-            log.error("RX: DataPdu.from_buffer() FAILED with: Message to small")
+            logger.error("RX: DataPdu.from_buffer() FAILED with: Message to small")
             return 0            
         if reserved != 0:
-            log.error("RX: DataPdu.from_buffer() FAILED with: Reserved field is not zero")
+            logger.error("RX: DataPdu.from_buffer() FAILED with: Reserved field is not zero")
             return 0
         self.data.extend(buffer[DATA_PDU_HDRLEN:length])
         return length
@@ -711,7 +715,7 @@ class AckInfoEntry():
 
     def from_buffer(self, buffer):
         if len(buffer) < MINIMUM_ACK_INFO_ENTRYLEN:
-            log.error("RX: AckInfoEntry.from_buffer() FAILED with: Message to small")
+            logger.error("RX: AckInfoEntry.from_buffer() FAILED with: Message to small")
             return 0
         # Read AckInfoEntry Header 
         unpacked_data = struct.unpack('<HHHIIH', buffer[:16])
@@ -722,13 +726,13 @@ class AckInfoEntry():
         self.msid = unpacked_data[4]
         total_entries = unpacked_data[5]
         if length > len(buffer):
-            log.error("RX AckInfoEntry.from_buffer() FAILED with: Buffer too small")
+            logger.error("RX AckInfoEntry.from_buffer() FAILED with: Buffer too small")
             return 0
         if reserved != 0:
-            log.error("RX AckInfoEntry.from_buffer() FAILED with: Reserved field is not zero")
+            logger.error("RX AckInfoEntry.from_buffer() FAILED with: Reserved field is not zero")
             return 0
         if length != MINIMUM_ACK_INFO_ENTRYLEN + 12 + total_entries * 2:
-            log.error("RX AckInfoEntry.from_buffer() FAILED with: Corrupt PDU")
+            logger.error("RX AckInfoEntry.from_buffer() FAILED with: Corrupt PDU")
             return 0
         num_entries = 0
         nbytes = 16
@@ -744,16 +748,16 @@ class AckInfoEntry():
             type = buffer[nbytes]
             optlen = buffer[nbytes+1]
             if optlen == 0:
-                log.error("RX: AckInfoEntry.from_buffer() FAILED with: Invalid option TLV")
+                logger.error("RX: AckInfoEntry.from_buffer() FAILED with: Invalid option TLV")
                 return 0
             if type == int(Option.TsEcr):
                 if optlen != 12:
-                    log.error("RX: AckInfoEntry.from_buffer() FAILED with: Invalid option len of tsEcr")
+                    logger.error("RX: AckInfoEntry.from_buffer() FAILED with: Invalid option len of tsEcr")
                     return 0
                 tlv_unpacked = struct.unpack('<ccHQ', buffer[nbytes:nbytes+12])
                 self.tsecr = tlv_unpacked[3]
             else:
-                log.info("RX: Ignore unkown option {}".format(type))
+                logger.info("RX: Ignore unkown option {}".format(type))
             nbytes = nbytes + optlen
         return nbytes
 
@@ -814,7 +818,7 @@ class AckPdu():
 
     def from_buffer(self, buffer):
         if len(buffer) < MINIMUM_ACK_PDU_LEN:
-            log.error("RX: AckPdu.from_buffer() FAILED with: Message to small")
+            logger.error("RX: AckPdu.from_buffer() FAILED with: Message to small")
             return 0
 
         # Read AddressPdu Header 
@@ -825,10 +829,10 @@ class AckPdu():
         self.src_ipaddr = self.src_ipaddr = socket.inet_ntoa(int_to_bytes(unpacked_data[5]))
         total_entries = unpacked_data[6]
         if len(buffer) < length:
-            log.error("RX: AckPdu.from_buffer() FAILED with: Message to small")
+            logger.error("RX: AckPdu.from_buffer() FAILED with: Message to small")
             return 0
         if unused != 0:
-            log.error("RX: AckPdu.from_buffer() FAILED witg: Unused field is not zero")
+            logger.error("RX: AckPdu.from_buffer() FAILED witg: Unused field is not zero")
             return 0
 
         # Read AckInfo entries
@@ -837,12 +841,12 @@ class AckPdu():
         while num_entries < total_entries:
             infolen = struct.unpack("<H",buffer[nbytes:nbytes+2])[0]
             if nbytes + infolen > len(buffer):
-                log.error("RX: AckPdu.from_buffer() FAILED with: Corrupt AckInfoEntry")
+                logger.error("RX: AckPdu.from_buffer() FAILED with: Corrupt AckInfoEntry")
                 return 0
             ack_info_entry = AckInfoEntry()
             consumed = ack_info_entry.from_buffer(buffer[nbytes:])
             if consumed < 0:
-                log.error("RX: AckPdu.from_buffer() FAILED with: Invalid AckInfoEntry")
+                logger.error("RX: AckPdu.from_buffer() FAILED with: Invalid AckInfoEntry")
                 return 0
             self.info_entries.append(ack_info_entry)
             nbytes = nbytes + infolen
@@ -850,12 +854,12 @@ class AckPdu():
         return nbytes
 
     def log(self, rxtx):
-        log.debug('{} *** AckPdu *************************************************'.format(rxtx))
-        log.debug('{} * src:{}'.format(rxtx, self.src_ipaddr))
+        logger.debug('{} *** AckPdu *************************************************'.format(rxtx))
+        logger.debug('{} * src:{}'.format(rxtx, self.src_ipaddr))
         for i,val in enumerate(self.info_entries):
-            log.debug('{} * seqnohi:{} remote_ipaddr:{} msid:{} missed:{} tval:{} tsecr:{}'.format(rxtx,
+            logger.debug('{} * seqnohi:{} remote_ipaddr:{} msid:{} missed:{} tval:{} tsecr:{}'.format(rxtx,
                 val.seqnohi, val.remote_ipaddr, val.msid, val.missing_seqnos, val.tvalue, val.tsecr))
-        log.debug('{} ****************************************************************'.format(rxtx))
+        logger.debug('{} ****************************************************************'.format(rxtx))
 
 ################################################################################
 ## P_MUL Client
@@ -913,10 +917,10 @@ class Destination():
         self.air_datarate  = air_datarate            # Measured AirDatarate for bulk traffic
         self.retry_timeout = retry_timeout           # Measured retry timeout for message transfer
         self.ack_timeout   = ack_timeout             # RTT for AddressPdu and AckPdu back
-        log.debug("TX: Destination(to: {}):".format(dest))
-        log.debug("AirDatarate: {}".format(self.air_datarate))
-        log.debug("RetryTimeout: {}".format(self.retry_timeout))
-        log.debug("AckTimeout: {}".format(self.ack_timeout))
+        logger.debug("TX: Destination(to: {}):".format(dest))
+        logger.debug("AirDatarate: {}".format(self.air_datarate))
+        logger.debug("RetryTimeout: {}".format(self.retry_timeout))
+        logger.debug("AckTimeout: {}".format(self.ack_timeout))
         # Loss detection
         self.missing_fragments = []
 
@@ -946,18 +950,18 @@ class Destination():
 
     def is_duplicate(self, tsecr): 
         if tsecr is None or tsecr <= 0:
-            log.debug("TX: Ignore invalid Timestamp Echo Reply for Duplicate Detection")
+            logger.debug("TX: Ignore invalid Timestamp Echo Reply for Duplicate Detection")
             return False # no duplicate
         if tsecr == self.last_received_tsecr:
-            log.debug("TX: AckPdu from {} is a duplicate".format(self.dest))
+            logger.debug("TX: AckPdu from {} is a duplicate".format(self.dest))
             return True #is duplicate */
-        log.debug("Sender: Updated TSecr to {}".format(tsecr))
+        logger.debug("Sender: Updated TSecr to {}".format(tsecr))
         self.last_received_tsecr = tsecr
         return False # Not duplicate
 
     def update_ack_timeout(self, tsecr, tvalue): 
         if tsecr is None or tsecr <= 0:
-            log.debug("TX: Ignore invalid Timestamp Echo Reply for AckTimeout")
+            logger.debug("TX: Ignore invalid Timestamp Echo Reply for AckTimeout")
             return
         if tvalue is None:
             tvalue = 0
@@ -966,40 +970,40 @@ class Destination():
         delivery_time = milli_now - tsecr
         new_ack_timeout = delivery_time - tvalue
         if new_ack_timeout <= 0:
-            log.debug("TX Ignore invalid ackTimeout of {}".format(new_ack_timeout))
+            logger.debug("TX Ignore invalid ackTimeout of {}".format(new_ack_timeout))
             return
         self.ack_timeout = round((self.ack_timeout + new_ack_timeout) / 2)
-        log.debug("TX: Updated AckTimeout for {} to {} new_ack_timeout: {} tValue: {} delivery_time: {}".format(
+        logger.debug("TX: Updated AckTimeout for {} to {} new_ack_timeout: {} tValue: {} delivery_time: {}".format(
             self.dest, self.ack_timeout, new_ack_timeout, tvalue, delivery_time))
 
     def update_retry_timeout(self, tsecr):
         if tsecr is None or tsecr <= 0:
-            log.debug("TX: Ignore invalid Timestamp Echo Reply for RetryTimeout")
+            logger.debug("TX: Ignore invalid Timestamp Echo Reply for RetryTimeout")
             return
         # Calculate the retryTimeout based on the RTT */
         milli_now = date_to_milli(datetime.now())
         retry_timeout = milli_now - tsecr
         if retry_timeout <= 0:
-            log.error("TX: Ignore invalid retry_timeout of {}".format(retry_timeout))
+            logger.error("TX: Ignore invalid retry_timeout of {}".format(retry_timeout))
             return
         retry_timeout = min(retry_timeout, self.cfg["max_retry_timeout"])   # upper boundary
         retry_timeout = max(retry_timeout, self.cfg["min_retry_timeout"])   # lower boundary
         self.retry_timeout = round((self.retry_timeout + retry_timeout) / 2)
-        log.debug("TX: Updated retry_timeout for {} to {} new_retry_timeout: {}".format(
+        logger.debug("TX: Updated retry_timeout for {} to {} new_retry_timeout: {}".format(
             self.dest, self.retry_timeout, retry_timeout))
 
     def update_air_datarate(self, air_datarate):
         air_datarate = min(air_datarate, self.cfg["max_datarate"])  # upper boundary
         air_datarate = max(air_datarate, self.cfg["min_datarate"])  # lower boundary
         self.air_datarate = round((self.air_datarate + air_datarate) / 2)
-        log.debug("TX: Updated air_datarate for {} to {} new_air_datarate: {}".format(
+        logger.debug("TX: Updated air_datarate for {} to {} new_air_datarate: {}".format(
             self.dest, self.air_datarate, air_datarate))
 
     def update_air_datarate_after_timeout(self): 
         self.air_datarate = round(self.air_datarate / 2)
         self.air_datarate = min(self.air_datarate, self.cfg["max_datarate"])  # upper boundary
         self.air_datarate = max(self.air_datarate, self.cfg["min_datarate"])  # lower boundary
-        log.debug("TX: Updated air_datarate for {} to {} after timeout".format(
+        logger.debug("TX: Updated air_datarate for {} to {} after timeout".format(
             self.dest, self.air_datarate))
 
     def log(self):
@@ -1008,7 +1012,7 @@ class Destination():
             if self.fragment_ack_status[key] == True:
                 acked = acked + 1
             total = total + 1
-        log.debug("TX {}: {}/{} air_datarate: {} retry_timeout: {} loss: {} {}/{} missed-ack: {} missing: {}".format(
+        logger.debug("TX {}: {}/{} air_datarate: {} retry_timeout: {} loss: {} {}/{} missed-ack: {} missing: {}".format(
             self.dest, acked, total, self.air_datarate, self.retry_timeout,
             round(100*self.missed_data_count/self.sent_data_count), self.missed_data_count, self.sent_data_count,
             self.missed_ack_count, self.missing_fragments))
@@ -1094,21 +1098,21 @@ class TxContext():
                                                 # { tx_datarate: bit/s, air_datarate: bit/s retry_timeout: ms, fragments: []}
 
     def log(self, rxtx):
-        log.debug('{} +--------------------------------------------------------------+'.format(rxtx))
-        log.debug('{} | TX Context                                                   |'.format(rxtx))
-        log.debug('{} +--------------------------------------------------------------+'.format(rxtx))
-        log.debug('{} | dest_list: {}'.format(rxtx, self.dest_list))
-        log.debug('{} | destip: {}'.format(rxtx, self.destip))
-        log.debug('{} | msid: {}'.format(rxtx, self.msid))
-        log.debug('{} | traffic_type: {}'.format(rxtx, self.traffic_mode));
-        log.debug('{} | PduDelay: {} msec'.format(rxtx, self.pdu_delay))
-        log.debug('{} | Datarate: {} bit/s'.format(rxtx, self.tx_datarate))
-        log.debug('{} | MinDatarate: {} bit/s'.format(rxtx, self.cfg["min_datarate"]))
-        log.debug('{} | MaxDatarate: {} bit/s'.format(rxtx, self.cfg["max_datarate"]))
-        log.debug('{} | MaxIncreasePercent: {} %'.format(rxtx, self.cfg["max_increase"]*100))
+        logger.debug('{} +--------------------------------------------------------------+'.format(rxtx))
+        logger.debug('{} | TX Context                                                   |'.format(rxtx))
+        logger.debug('{} +--------------------------------------------------------------+'.format(rxtx))
+        logger.debug('{} | dest_list: {}'.format(rxtx, self.dest_list))
+        logger.debug('{} | destip: {}'.format(rxtx, self.destip))
+        logger.debug('{} | msid: {}'.format(rxtx, self.msid))
+        logger.debug('{} | traffic_type: {}'.format(rxtx, self.traffic_mode));
+        logger.debug('{} | PduDelay: {} msec'.format(rxtx, self.pdu_delay))
+        logger.debug('{} | Datarate: {} bit/s'.format(rxtx, self.tx_datarate))
+        logger.debug('{} | MinDatarate: {} bit/s'.format(rxtx, self.cfg["min_datarate"]))
+        logger.debug('{} | MaxDatarate: {} bit/s'.format(rxtx, self.cfg["max_datarate"]))
+        logger.debug('{} | MaxIncreasePercent: {} %'.format(rxtx, self.cfg["max_increase"]*100))
         for key in self.dest_status:
-            log.debug('{} | fragmentsAckStatus[{}]: {}'.format(rxtx, key, self.dest_status[key].fragment_ack_status))
-        log.debug('{} +--------------------------------------------------------------+'.format(rxtx))
+            logger.debug('{} | fragmentsAckStatus[{}]: {}'.format(rxtx, key, self.dest_status[key].fragment_ack_status))
+        logger.debug('{} +--------------------------------------------------------------+'.format(rxtx))
 
     def increment_number_of_sent_data_pdus(self):
         for i, val in enumerate(self.dest_list):
@@ -1175,7 +1179,7 @@ class TxContext():
             # AddressPdu was received
             bytes = get_sent_bytes(self.tx_fragments)
             air_datarate = round(bytes*8*1000/tvalue)
-            log.debug("TX: {} measured air-datarate: {} bit/s send-bytes: {} tValue: {}".format(
+            logger.debug("TX: {} measured air-datarate: {} bit/s send-bytes: {} tValue: {}".format(
                 remote_ipaddr, air_datarate, bytes, tvalue))
         else:                   
             # AddressPdu wasn´t received
@@ -1184,7 +1188,7 @@ class TxContext():
                 return None     # Nothing was received, neither AddressPdu nor DataPdu
             bytes = self.calc_received_bytes(first_seqno)
             air_datarate = round(bytes*8*1000/tvalue)
-            log.debug("TX: {} measured air-datarate: {} bit/s 1st rx-fragment: {}end-bytes: {} tValue: {}".format(
+            logger.debug("TX: {} measured air-datarate: {} bit/s 1st rx-fragment: {}end-bytes: {} tValue: {}".format(
                 remote_ipaddr, first_seqno, bytes, tvalue))
         return air_datarate
 
@@ -1235,7 +1239,7 @@ class TxContext():
 
         # Update the txDatarate based on the measured AirDatarate
         self.tx_datarate = self.min_air_datarate()
-        log.debug('TX-CTX: Measured AirDatarate: {}'.format(self.tx_datarate))  
+        logger.debug('TX-CTX: Measured AirDatarate: {}'.format(self.tx_datarate))  
     
         # Calculate the current window based on the calculated TX Datarate */
         _cwnd = get_cwnd(self.cfg['cwnds'], self.tx_datarate)
@@ -1260,10 +1264,10 @@ class TxContext():
             # shall prevent packet loss due buffer overflow if the AirDatarate didn´t increase */
             self.tx_datarate = round(((remaining + self.cfg["inflight_bytes"]) * 8 * 1000) / duration)
             #Limit the increase to an upper boundary */
-            log.debug('TX-CTX: Increased txDatarate: {}'.format(self.tx_datarate))
-            log.debug('TX-CTX: Limit TxDatarate to {}'.format(old_tx_datarate * (1 + self.cfg["max_increase"])))
+            logger.debug('TX-CTX: Increased txDatarate: {}'.format(self.tx_datarate))
+            logger.debug('TX-CTX: Limit TxDatarate to {}'.format(old_tx_datarate * (1 + self.cfg["max_increase"])))
             self.tx_datarate = min(self.tx_datarate, old_tx_datarate * (1 + self.cfg["max_increase"]))
-            log.debug("TX-CTX: Increased txDatarate to {}".format(self.tx_datarate))
+            logger.debug("TX-CTX: Increased txDatarate to {}".format(self.tx_datarate))
 
         # At full speed the txDatarate is set to the maximum configured txDatarate */
         if self.use_min_pdu_delay is True:
@@ -1300,7 +1304,7 @@ class TxContext():
                 _retry_timeout = _retry_timeout * 2
             if 0 == max_retry_count:
                 _retry_timeout = _retry_timeout * (1 + self.cfg["max_increase"])
-            log.debug("TX-CTX: Message: Set RetryTimeout to {} at retrycount of {}".format(_retry_timeout, max_retry_count))
+            logger.debug("TX-CTX: Message: Set RetryTimeout to {} at retrycount of {}".format(_retry_timeout, max_retry_count))
 
             # Retry Timeout
             self.retry_timestamp = datetime.now() + timedelta(milliseconds=_retry_timeout)
@@ -1330,12 +1334,12 @@ class TxContext():
             _retry_timeout = max(_retry_timeout, self.cfg["min_retry_timeout"])
             _retry_timeout = min(_retry_timeout, self.cfg["max_retry_timeout"])
             # Calculate the timestamp at which a retransmission has too occur
-            log.debug("TX-CTX Bulk: Set RetryTimeout {} to for AirDatarate of {} and ackTimeout of {}".format(
+            logger.debug("TX-CTX Bulk: Set RetryTimeout {} to for AirDatarate of {} and ackTimeout of {}".format(
                 _retry_timeout, _air_datarate, _ack_timeout))
             # Retry Timeout
             self.retry_timestamp = datetime.now() + timedelta(milliseconds=_retry_timeout)
             self.retry_timeout = _retry_timeout
-            log.debug("TX Init() tx_datarate: {} air_datarate: {} retry_timeout: {} ack_timeout: {}".format(
+            logger.debug("TX Init() tx_datarate: {} air_datarate: {} retry_timeout: {} ack_timeout: {}".format(
             self.tx_datarate, _air_datarate, _retry_timeout, _ack_timeout))
 
         #***************************************************************************
@@ -1356,27 +1360,27 @@ class TxContext():
         tx_phase["fragment_list"] = fragment_list
         self.tx_phases.append(tx_phase)
 
-        log.debug('TX +--------------------------------------------------------------+')
-        log.debug('SND | TX Phase                                                     |')
-        log.debug('SND |--------------------------------------------------------------+')
-        log.debug('SND | dest_list: {}'.format(dest_list))
-        log.debug('SND | cwnd: {}'.format(_cwnd))
-        log.debug('SND | seqnohi: {}'.format(get_seqnohi(self.tx_fragments)))
-        log.debug('SND | tx_fragments: {}'.format(self.tx_fragments))
+        logger.debug('TX +--------------------------------------------------------------+')
+        logger.debug('SND | TX Phase                                                     |')
+        logger.debug('SND |--------------------------------------------------------------+')
+        logger.debug('SND | dest_list: {}'.format(dest_list))
+        logger.debug('SND | cwnd: {}'.format(_cwnd))
+        logger.debug('SND | seqnohi: {}'.format(get_seqnohi(self.tx_fragments)))
+        logger.debug('SND | tx_fragments: {}'.format(self.tx_fragments))
         ack_recv_status = dict()
         for addr in self.dest_status:
             if self.dest_status[addr].completed == False:
                 ack_recv_status[addr] = self.dest_status[addr].ack_received
-        log.debug('SND | AckRecvStatus: {}'.format(ack_recv_status))
-        log.debug('SND | OldTxDatarate: {}'.format(old_tx_datarate))
-        log.debug('SND | NewTxDatarate: {}'.format(self.tx_datarate))
-        log.debug('SND | AirDatarate: {}'.format(_air_datarate))
-        log.debug('SND | AckTimeout: {}'.format(_ack_timeout))
-        log.debug('SND | RetryTimeout: {}'.format(_retry_timeout))
-        log.debug('SND | InflightBytes: {}'.format(self.cfg["inflight_bytes"]))
-        log.debug('SND | RemainingBytes: {}'.format(remaining_bytes))
-        log.debug('SND | RetryCount: {} Max: {}'.format(self.get_max_retry_count(), self.cfg["max_retry_count"]))
-        log.debug('TX +--------------------------------------------------------------+')
+        logger.debug('SND | AckRecvStatus: {}'.format(ack_recv_status))
+        logger.debug('SND | OldTxDatarate: {}'.format(old_tx_datarate))
+        logger.debug('SND | NewTxDatarate: {}'.format(self.tx_datarate))
+        logger.debug('SND | AirDatarate: {}'.format(_air_datarate))
+        logger.debug('SND | AckTimeout: {}'.format(_ack_timeout))
+        logger.debug('SND | RetryTimeout: {}'.format(_retry_timeout))
+        logger.debug('SND | InflightBytes: {}'.format(self.cfg["inflight_bytes"]))
+        logger.debug('SND | RemainingBytes: {}'.format(remaining_bytes))
+        logger.debug('SND | RetryCount: {} Max: {}'.format(self.get_max_retry_count(), self.cfg["max_retry_count"]))
+        logger.debug('TX +--------------------------------------------------------------+')
 
     def get_next_tx_fragment(self):
         for key in self.tx_fragments:
@@ -1396,7 +1400,7 @@ class TxContext():
         sent = num_sent_fragments(self.tx_fragments)
         percent = round(100 * (sent / len(self.tx_fragments)));
         bytes = sent * self.cfg["mtu"]
-        log.debug("TX: sent: {} total: {}".format(sent, total))
+        logger.debug("TX: sent: {} total: {}".format(sent, total))
         return { 'state': 'SendingData', 'bytes': bytes, 'percent': percent, 'tx_datarate': self.tx_datarate }
 
     def get_deliver_status(self): 
@@ -1454,7 +1458,7 @@ class TxContext():
         if self.retry_timer is not None:
             self.cancel_retransmission_timer()
         timeout = timeout/1000
-        #log.debug("start retransmission timer in {} milliseconds".format(timeout))
+        #logger.debug("start retransmission timer in {} milliseconds".format(timeout))
         self.retry_timer = self.loop.call_later(timeout, self.retransmission_timeout)
 
     def pdu_delay_timeout(self):
@@ -1471,7 +1475,7 @@ class TxContext():
         if self.pdu_delay_timer is not None:
             self.cancel_pdu_delay_timer()
         timeout = timeout/1000
-        #log.debug("start pdu_delay timer in {} milliseconds".format(timeout))
+        #logger.debug("start pdu_delay timer in {} milliseconds".format(timeout))
         self.pdu_delay_timer = self.loop.call_later(timeout, self.pdu_delay_timeout)
 
     def tran(self, to):
@@ -1483,7 +1487,7 @@ class TxContext():
             await func(ev)
 
     async def state_IDLE(self, ev):
-        log.debug("SND | IDLE: {}".format(ev['id']))
+        logger.debug("SND | IDLE: {}".format(ev['id']))
         self.cancel_pdu_delay_timer()
         self.cancel_retransmission_timer()
         now = datetime.now()
@@ -1522,17 +1526,17 @@ class TxContext():
             if self.traffic_mode == Traffic.Message:
                 # Start Retransmission timer
                 timeout = round(timedelta_milli(self.retry_timestamp - now))
-                log.debug('SND | start Retransmission timer with {} msec delay'.format(timeout))
+                logger.debug('SND | start Retransmission timer with {} msec delay'.format(timeout))
                 self.cancel_retransmission_timer()
                 self.start_retransmission_timer(timeout)
                 # Change State to WAITING_FOR_ACKS
-                log.debug('SND | change state to WAITING_FOR_ACKS')
+                logger.debug('SND | change state to WAITING_FOR_ACKS')
                 self.tran(TxState.WaitingForAcks)
             else:      # BULK traffoc mpde
                 # Start PDU_Delay Timer
-                log.debug('SND | IDLE - start PDU Delay timer with a {} msec timeout'.format(MIN_PDU_DELAY))
+                logger.debug('SND | IDLE - start PDU Delay timer with a {} msec timeout'.format(MIN_PDU_DELAY))
                 self.start_pdu_delay_timer(MIN_PDU_DELAY)
-                log.debug('SND | IDLE - Change state to SENDING_DATA')
+                logger.debug('SND | IDLE - Change state to SENDING_DATA')
                 self.tran(TxState.SendingData)
         elif ev["id"] == TxEvent.Abort:
             pass
@@ -1548,7 +1552,7 @@ class TxContext():
             pass
 
     async def state_sending_data(self, ev):
-        log.debug("SND | SENDING_DATA: {}".format(ev['id']))
+        logger.debug("SND | SENDING_DATA: {}".format(ev['id']))
         if ev["id"] == TxEvent.Start:
             pass
         elif ev["id"] == TxEvent.Abort:
@@ -1571,18 +1575,18 @@ class TxContext():
             data_pdu.log('SND');
 
             pdu = data_pdu.to_buffer()
-            log.debug('SND | SND DataPdu[{}] len: {} cwnd_seqno: {}'.format(data_pdu.seqno, len(data_pdu.data), data_pdu.cwnd_seqno));
+            logger.debug('SND | SND DataPdu[{}] len: {} cwnd_seqno: {}'.format(data_pdu.seqno, len(data_pdu.data), data_pdu.cwnd_seqno));
             self.cli.sendto(self.destip, pdu)
             self.tx_fragments[data_pdu.seqno]['sent'] = True
             self.tx_fragments[data_pdu.seqno]['len'] = len(data_pdu.data)
             self.increment_number_of_sent_data_pdus()
             self.num_sent_data_pdus += 1
 
-            log.debug('SND | SENDING_DATA - start PDU Delay timer with a {} msec timeout'.format(self.pdu_delay));
+            logger.debug('SND | SENDING_DATA - start PDU Delay timer with a {} msec timeout'.format(self.pdu_delay));
             self.start_pdu_delay_timer(self.pdu_delay);
 
             if self.is_final_fragment(data_pdu.seqno):
-                log.debug('SND | SENDING_DATA - Change state to SENDING_EXTRA_ADDRESS_PDU');
+                logger.debug('SND | SENDING_DATA - Change state to SENDING_EXTRA_ADDRESS_PDU');
                 self.tran(TxState.SendingExtraAddressPdu);
 
         elif ev["id"] == TxEvent.RetransmissionTimeout:
@@ -1593,7 +1597,7 @@ class TxContext():
             pass
 
     async def state_sending_extra_address_pdu(self, ev):
-        log.debug("SND | SENDING_EXTRA_ADDRESS_PDU: {}".format(ev['id']))
+        logger.debug("SND | SENDING_EXTRA_ADDRESS_PDU: {}".format(ev['id']))
         if ev["id"] == TxEvent.Start:
             pass
         elif ev["id"] == TxEvent.Abort:
@@ -1633,11 +1637,11 @@ class TxContext():
         
             # Start Retransmission timer
             timeout = round(timedelta_milli(self.retry_timestamp - now))
-            log.debug('SND | start Retransmission timer with {} msec delay'.format(timeout))
+            logger.debug('SND | start Retransmission timer with {} msec delay'.format(timeout))
             self.cancel_retransmission_timer()
             self.start_retransmission_timer(timeout)
             # Change State to WAITING_FOR_ACKS
-            log.debug('SND | change state to WAITING_FOR_ACKS')
+            logger.debug('SND | change state to WAITING_FOR_ACKS')
             self.tran(TxState.WaitingForAcks)
             
         elif ev["id"] == TxEvent.RetransmissionTimeout:
@@ -1648,7 +1652,7 @@ class TxContext():
             pass
 
     async def state_WAITING_FOR_ACKS(self, ev):
-        log.debug("SND | WAITING_FOR_ACKS: {}".format(ev['id']))
+        logger.debug("SND | WAITING_FOR_ACKS: {}".format(ev['id']))
         if ev["id"] == TxEvent.Start:
             pass
         elif ev["id"] == TxEvent.Abort:
@@ -1660,10 +1664,10 @@ class TxContext():
 
             # Check if ACK sender is in our destination list
             if remote_ipaddr not in self.dest_list:
-                log.debug("TX: Ignore ACK from {}".format(remote_ipaddr))
+                logger.debug("TX: Ignore ACK from {}".format(remote_ipaddr))
                 return
             if remote_ipaddr not in self.dest_status:
-                log.debug("TX: Ignore ACK from {}".format(remote_ipaddr))
+                logger.debug("TX: Ignore ACK from {}".format(remote_ipaddr))
                 return
             dest_status = self.dest_status[remote_ipaddr]
 
@@ -1682,10 +1686,10 @@ class TxContext():
             # Update the airDatarate based on the received tvalue
             if tvalue > 0:
                 air_datarate = self.calc_air_datarate(remote_ipaddr, info_entry.tsecr, info_entry.missing_seqnos, tvalue)
-                log.debug("TX Measured air-datarate: {} and tvalue: {} sec".format(air_datarate, tvalue/1000))
+                logger.debug("TX Measured air-datarate: {} and tvalue: {} sec".format(air_datarate, tvalue/1000))
                 # Prevent increase of airDatarate in a wrong case
                 if air_datarate > self.tx_datarate:
-                    log.debug("SND | air-datarate {} is larger than tx-datarate - Update air-datarate to {}".format(
+                    logger.debug("SND | air-datarate {} is larger than tx-datarate - Update air-datarate to {}".format(
                         air_datarate, self.tx_datarate, self.tx_datarate))
                     dest_status.update_air_datarate(self.tx_datarate)
                 else:
@@ -1700,8 +1704,8 @@ class TxContext():
                 self.init_tx_phase()
 
                 if self.get_max_retry_count() > self.cfg["max_retry_count"]:
-                    log.debug("SND | Max Retransmission Count Reached")
-                    log.debug("SND | change state to Idle")
+                    logger.debug("SND | Max Retransmission Count Reached")
+                    logger.debug("SND | change state to Idle")
                     self.tran(TxState.Idle)
 
                     num_acked_dests = 0
@@ -1755,22 +1759,22 @@ class TxContext():
                     if self.traffic_mode == Traffic.Message:
                         # Start Retransmission timer
                         timeout = round(timedelta_milli(self.retry_timestamp - datetime.now()))
-                        log.debug('SND | start Retransmission timer with {} msec delay'.format(timeout))
+                        logger.debug('SND | start Retransmission timer with {} msec delay'.format(timeout))
                         self.cancel_retransmission_timer()
                         self.start_retransmission_timer(timeout)
                         # Change State to WAITING_FOR_ACKS
-                        log.debug('SND | change state to WAITING_FOR_ACKS')
+                        logger.debug('SND | change state to WAITING_FOR_ACKS')
                         self.tran(TxState.WaitingForAcks)
                     else:      # BULK traffoc mpde
                         # Start PDU_Delay Timer
-                        log.debug('SND | IDLE - start PDU Delay timer with a {} msec timeout'.format(MIN_PDU_DELAY))
+                        logger.debug('SND | IDLE - start PDU Delay timer with a {} msec timeout'.format(MIN_PDU_DELAY))
                         self.start_pdu_delay_timer(MIN_PDU_DELAY)
-                        log.debug('SND | IDLE - Change state to SENDING_DATA')
+                        logger.debug('SND | IDLE - Change state to SENDING_DATA')
                         self.tran(TxState.SendingData)
                 else:
                     # Change state to FINISHED
                     self.cancel_retransmission_timer()
-                    log.debug('SND | change state to FINISHED');
+                    logger.debug('SND | change state to FINISHED');
                     self.tran(TxState.Finished)
 
                     ack_status = dict()
@@ -1803,7 +1807,7 @@ class TxContext():
                     dest_status.update_air_datarate_after_timeout() 
                     # Increment the missed ACK counter
                     dest_status.missed_ack_count += 1
-                    log.debug('SND | {} missed acks: {}'.format(addr, dest_status.missed_ack_count))
+                    logger.debug('SND | {} missed acks: {}'.format(addr, dest_status.missed_ack_count))
                 
                     # Add a list of missing data pdus for calculating the missed_data_count
                     missing = [];
@@ -1832,13 +1836,13 @@ class TxContext():
 
             # Remove destinations if they have not responded several times
             for i,val in enumerate(remove_list):    
-                log.debug('SND | Remove {} from active destinations'.format(val))
+                logger.debug('SND | Remove {} from active destinations'.format(val))
                 del self.dest_status[val]
             
             # Check if transmission should be canceled
             if self.get_max_retry_count() > self.cfg['max_retry_count']:
-                log.debug('SND | Max Retransmission Count Reached')
-                log.debug('SND | change state to Idle')
+                logger.debug('SND | Max Retransmission Count Reached')
+                logger.debug('SND | change state to Idle')
                 self.tran(TxState.Idle)
             
                 if num_acked_dests > 0:
@@ -1849,7 +1853,7 @@ class TxContext():
                 return
 
             # Initialize after Retransmission 
-            log.debug('TX WAITING_FOR_ACKS - initTransmissionPhase after RetransmissionTimeout')
+            logger.debug('TX WAITING_FOR_ACKS - initTransmissionPhase after RetransmissionTimeout')
             self.init_tx_phase(timeout_occured=True)
 
             # Send Address PDU
@@ -1886,19 +1890,19 @@ class TxContext():
                 if self.traffic_mode == Traffic.Message:
                     # Start Retransmission timer
                     timeout = round(timedelta_milli(self.retry_timestamp - datetime.now()))
-                    log.debug('SND | start Retransmission timer with {} msec delay'.format(timeout))
+                    logger.debug('SND | start Retransmission timer with {} msec delay'.format(timeout))
                     self.cancel_retransmission_timer()
                     self.start_retransmission_timer(timeout)     
                 else:
                     # Start PDU Delay Timer
-                    log.debug('SND | start PDU Delay timer with a {} msec timeout'.format(MIN_PDU_DELAY))
+                    logger.debug('SND | start PDU Delay timer with a {} msec timeout'.format(MIN_PDU_DELAY))
                     self.start_pdu_delay_timer(MIN_PDU_DELAY)
                     # Change state to SENDING_DATA */
-                    log.debug('SND | change state to SENDING_DATA')
+                    logger.debug('SND | change state to SENDING_DATA')
                     self.tran(TxState.SendingData)
             else:
                 # Change state to FINISHED */
-                log.debug('SND | WAITING_FOR_ACKS - Change state to FINISHED')
+                logger.debug('SND | WAITING_FOR_ACKS - Change state to FINISHED')
                 self.tran(TxState.Finished)
                 self.cli.transmission_finished(self.msid, self.get_delivery_status(), ack_status)
         elif ev["id"] == TxEvent.ExpiryTimeout:
@@ -1907,7 +1911,7 @@ class TxContext():
             pass
 
     async def state_finished(self, ev):
-        log.debug("SND | WAITING_FOR_ACKS: {}".format(ev['id']))
+        logger.debug("SND | WAITING_FOR_ACKS: {}".format(ev['id']))
         if ev["id"] == TxEvent.Start:
             pass
         elif ev["id"] == TxEvent.Abort:
@@ -1925,10 +1929,10 @@ class TxContext():
 
 class StatusObserver():
     def message_received(self, message, from_addr):
-        log.debug('received message of len {} from {}'.format(len(message), from_addr))
+        logger.debug('received message of len {} from {}'.format(len(message), from_addr))
 
     def transmission_finished(self, msid, delivery_status, ack_status):
-        log.debug('transmission of msid: {} finished with {} {}'.format(msid, delivery_status, ack_status))
+        logger.debug('transmission of msid: {} finished with {} {}'.format(msid, delivery_status, ack_status))
 
 class Client(asyncio.DatagramProtocol, chan.Observer):
     # Constructor
@@ -1951,7 +1955,7 @@ class Client(asyncio.DatagramProtocol, chan.Observer):
             # Create socket
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            log.error('socket listens to port {}'.format(self.aport))
+            logger.error('socket listens to port {}'.format(self.aport))
             self.sock.bind((self.src_ipaddr, self.aport))
             #mreq = struct.pack("=4sl", socket.inet_aton(mcast_ipaddr), socket.INADDR_ANY)
             #self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
@@ -1976,20 +1980,21 @@ class Client(asyncio.DatagramProtocol, chan.Observer):
 
     def sendto(self, ipaddr, packet):
         if self.channel is not None:
-            #log.debug('send packet over wireless channel'.format(ipaddr, self.aport))
+            #logger.debug('send packet over wireless channel'.format(ipaddr, self.aport))
             self.channel.sendto(ipaddr, self.dport, packet)
         else:
-            log.debug('send packet to addr {} port {}'.format(ipaddr, self.dport))
+            logger.debug('send packet to addr {} port {}'.format(ipaddr, self.dport))
             if self.transport is not None:
                 self.transport.sendto(packet, (ipaddr, self.dport))
             else:
-                log.error('UDP socket is not ready')
+                logger.error('UDP socket is not ready')
 
     async def start(self):
         coro = self.loop.create_datagram_endpoint(lambda: self, sock=self.sock)
         await asyncio.wait_for(coro, 2)
 
     async def _send(self, message, dst_addresses, traffic_type, node_info, future):
+        logger.debug('_send')
         # For unicast communication we use the unicast IP address
         if len(dst_addresses) == 1:
             dstip = dst_addresses[0]
@@ -1999,7 +2004,7 @@ class Client(asyncio.DatagramProtocol, chan.Observer):
         # Generate unique message-id
         msid = self.generate_msid()
         if msid == -1:
-            log.error('send_message() FAILED with: No msid found')
+            logger.error('send_message() FAILED with: No msid found')
             return False
 
         # Convert IPv4 addresses from string format into 32bit values
@@ -2040,7 +2045,7 @@ class Client(asyncio.DatagramProtocol, chan.Observer):
         return msid
 
     async def send_message(self, message, dst_addresses, node_info, future=None):
-        (message, dst_addresses, Traffic.Message, node_info, future);
+        return await self._send(message, dst_addresses, Traffic.Message, node_info, future);
 
     async def send_bulk(self, message, dst_addresses, node_info, future=None):
         return await self._send(message, dst_addresses, Traffic.Bulk, node_info, future);
@@ -2066,10 +2071,10 @@ class Client(asyncio.DatagramProtocol, chan.Observer):
 
     def connection_made(self, transport):
         self.transport = transport
-        log.debug('UDP socket is ready')
+        logger.debug('UDP socket is ready')
 
     def notify(self, message, addr):
-        log.debug("P_MUL Client ({}) received message of len {} from {}".format(self.src_ipaddr, len(message), addr))
+        logger.debug("P_MUL Client ({}) received message of len {} from {}".format(self.src_ipaddr, len(message), addr))
         self.datagram_received(message, addr)
 
     def datagram_received(self, data, addr):
@@ -2077,18 +2082,18 @@ class Client(asyncio.DatagramProtocol, chan.Observer):
         pdu.from_buffer(data[:MINIMUM_PACKET_LEN])
         pdu.log("SND")
 
-        log.debug("SND | Received packet from {} type: {} len:{}".format(addr, pdu.type, pdu.len))
+        logger.debug("SND | Received packet from {} type: {} len:{}".format(addr, pdu.type, pdu.len))
 
         if pdu.type == int(PduType.Ack):
             self._on_ack_pdu(data, addr)
         else:
-            log.debug("Received unkown PDU type {}".format(pdu.type))
+            logger.debug("Received unkown PDU type {}".format(pdu.type))
 
     def error_received(self, exc):
-        log.debug('Error received:', exc)
+        logger.debug('Error received:', exc)
 
     def connection_lost(self, exc):
-        log.debug("Socket closed, stop the event loop")
+        logger.debug("Socket closed, stop the event loop")
         loop = asyncio.get_event_loop()
         loop.stop()
 
@@ -2183,7 +2188,7 @@ class RxContext():
         if self.last_pdu_delay_timer is not None:
             self.cancel_last_pdu_delay_timer()
         timeout = timeout/1000
-        #log.debug("start last_pdu_delay timer in {} milliseconds".format(timeout))
+        #logger.debug("start last_pdu_delay timer in {} milliseconds".format(timeout))
         self.last_pdu_delay_timer = self.loop.call_later(timeout, self.last_pdu_delay_timeout)
 
     def ack_pdu_timeout(self):
@@ -2200,14 +2205,14 @@ class RxContext():
         if self.ack_pdu_timer is not None:
             self.cancel_ack_pdu_timer()
         timeout = timeout/1000
-        #log.debug("start ack_pdu_ timer in {} milliseconds".format(timeout))
+        #logger.debug("start ack_pdu_ timer in {} milliseconds".format(timeout))
         self.ack_pdu_timer = self.loop.call_later(timeout, self.ack_pdu_timeout)
 
     # Copy buffer to internal fragment buffer */
     def save_fragment(self, seqno, buffer):
         if seqno not in self.fragments:
             self.fragments[seqno] = buffer
-            log.debug('RCV | Saved fragment {} with len {}'.format(seqno, len(buffer)))
+            logger.debug('RCV | Saved fragment {} with len {}'.format(seqno, len(buffer)))
 
     # Return list of missing fragment Seq numbers */
     def get_missing_fragments(self): 
@@ -2222,7 +2227,7 @@ class RxContext():
         remaining = 0
 
         if self.total <= 0:
-            log.debug("RCV | Remaining fragment: 0 - Total number of PDUs is unkown")
+            logger.debug("RCV | Remaining fragment: 0 - Total number of PDUs is unkown")
             return 0
         # Calculate remaining number of PDUs based on the total number of
         # PDUs in the current window and the already received number of PDUS */
@@ -2233,7 +2238,7 @@ class RxContext():
         # The smallest number will become the remaining number of PDUs */
         remaining = min(remaining_window_num, remaining_window_seqno)
         remaining = max(remaining, 0)
-        log.debug('RCV | Remaining: {} windowNum: {} window_seqno: {}'.format(remaining, remaining_window_num, remaining_window_seqno))
+        logger.debug('RCV | Remaining: {} windowNum: {} window_seqno: {}'.format(remaining, remaining_window_num, remaining_window_seqno))
         return remaining
 
     # Update the MTU size based on the received fragments
@@ -2265,7 +2270,7 @@ class RxContext():
         # Update the stored datarate
         self.rx_datarate = min(datarate, self.cfg["max_datarate"])  # upper boundary
         self.rx_datarate = max(datarate, self.cfg["min_datarate"])  # lower boundary
-        log.debug("RCV | {} Updated RxDatarate to {} bit/s".format(self.my_ipaddr, self.rx_datarate))
+        logger.debug("RCV | {} Updated RxDatarate to {} bit/s".format(self.my_ipaddr, self.rx_datarate))
 
     # Calculate the timeout at which a AckPDU should be retransmitted */
     def calc_ack_pdu_timeout(self, num_dests, rx_datarate):
@@ -2282,14 +2287,14 @@ class RxContext():
             message_len = MAX_ADDRESS_PDU_LEN + MAX_ACK_PDU_LEN
             timeout = self.cfg["rtt_extra_delay"]
             timeout += round(message_len*8*1000/rx_datarate)
-        log.debug('RX AckPduTimeout: {} num_dests: {}'.format(timeout, num_dests))
+        logger.debug('RX AckPduTimeout: {} num_dests: {}'.format(timeout, num_dests))
         return timeout
 
     # Calculate the Time Value which should be included in the AckPdu */
     def calc_tvalue(self):
         deltatime = datetime.now() - self.start_timestamp
         tvalue = round(timedelta_milli(deltatime))
-        log.debug("RX TValue: {}".format(tvalue))
+        logger.debug("RX TValue: {}".format(tvalue))
         return tvalue
 
     # Update the maximum length of a AddressPdu
@@ -2309,7 +2314,7 @@ class RxContext():
         ack_info_entry.missing_seqnos = missing
         ack_pdu.info_entries.append(ack_info_entry)        
         pdu = ack_pdu.to_buffer()
-        log.debug("RCV | {} send AckPdu to {} of len {} with ts_ecr: {} tvalue: {} seqnohi: {} missing: {}".format(
+        logger.debug("RCV | {} send AckPdu to {} of len {} with ts_ecr: {} tvalue: {} seqnohi: {} missing: {}".format(
             self.my_ipaddr, self.remote_ipaddr, len(pdu), ts_ecr, tvalue, seqnohi, missing))
         if self.cli.channel is not None:
             self.cli.channel.sendto(self.remote_ipaddr, self.cli.aport, pdu)
@@ -2318,20 +2323,20 @@ class RxContext():
         return len(pdu)
 
     def log(self):
-        log.debug('RCV +--------------------------------------------------------------+')
-        log.debug('RCV | RX Phase                                                     |')
-        log.debug('RCV +--------------------------------------------------------------+')
-        log.debug('RCV | remote_ipaddr: {}'.format(self.remote_ipaddr))
-        log.debug('RCV | dests: {}'.format(self.dests))
-        log.debug('RCV | cwnd: {}'.format(self.cwnd))
-        log.debug('RCV | total: {}'.format(self.total))
-        log.debug('RCV | seqnohi: {}'.format(self.seqnohi))
-        log.debug('RCV | tsVal: {}'.format(self.ts_val))
-        log.debug('RCV | rx_datarate: {}'.format(self.rx_datarate))
-        log.debug('RCV +--------------------------------------------------------------+')
+        logger.debug('RCV +--------------------------------------------------------------+')
+        logger.debug('RCV | RX Phase                                                     |')
+        logger.debug('RCV +--------------------------------------------------------------+')
+        logger.debug('RCV | remote_ipaddr: {}'.format(self.remote_ipaddr))
+        logger.debug('RCV | dests: {}'.format(self.dests))
+        logger.debug('RCV | cwnd: {}'.format(self.cwnd))
+        logger.debug('RCV | total: {}'.format(self.total))
+        logger.debug('RCV | seqnohi: {}'.format(self.seqnohi))
+        logger.debug('RCV | tsVal: {}'.format(self.ts_val))
+        logger.debug('RCV | rx_datarate: {}'.format(self.rx_datarate))
+        logger.debug('RCV +--------------------------------------------------------------+')
 
     async def state_IDLE(self, ev):
-        log.debug('RCV | state_IDLE: {}'.format(ev['id']))
+        logger.debug('RCV | state_IDLE: {}'.format(ev['id']))
         if ev["id"] == RxEvent.AddressPdu:
             # Initialize Reception Phase
             address_pdu = ev['address_pdu']
@@ -2355,9 +2360,9 @@ class RxContext():
                 if len(self.dests) > 1: 
                     # Multicast - Wait random time before sending AckPdu
                     self.mcast_ack_timeout = round(random.random() * (len(self.dests) * ACK_PDU_DELAY_MSEC))
-                    log.debug("RCV | start LAST_PDU timer with a {} msec timeout')".format(self.mcast_ack_timeout))
+                    logger.debug("RCV | start LAST_PDU timer with a {} msec timeout')".format(self.mcast_ack_timeout))
                     self.start_last_pdu_delay_timer(self.mcast_ack_timeout)
-                    log.debug("RCV | IDLE - Change state to RECEIVING_DATA")
+                    logger.debug("RCV | IDLE - Change state to RECEIVING_DATA")
                     self.tran(RxState.ReceivingData)
                 else:
                     # Unicast -> Send AckPdu
@@ -2365,11 +2370,11 @@ class RxContext():
                     missed = self.get_missing_fragments()
                     nbytes = self.send_ack(self.seqnohi, missed, self.tvalue, self.ts_val)
                     timeout = self.calc_ack_pdu_timeout(len(self.dests), self.rx_datarate)
-                    log.debug("RCV | Start ACK_PDU timer with a {} msec timeout".format(timeout))
+                    logger.debug("RCV | Start ACK_PDU timer with a {} msec timeout".format(timeout))
                     self.start_ack_pdu_timer(timeout)
                     # Change state to SENT_ACK
                     self.cwnd = 00  # Reset RxPhase - FIXME??*/
-                    log.debug('RCV | RECEIVING_DATA - Change state to SENT_ACK')
+                    logger.debug('RCV | RECEIVING_DATA - Change state to SENT_ACK')
                     self.tran(RxState.SentAck)
             else:
                 # TrafficMode.Bulk - Start Last PDU Timer
@@ -2382,10 +2387,10 @@ class RxContext():
                     # At multicast the AckPdu will be randomly delayed to avoid collisions
                     self.mcast_ack_timeout = round(random.random() * (len(self.dests) * ACK_PDU_DELAY_MSEC))
                     timeout += self.mcast_ack_timeout
-                log.debug('RCV | start LAST_PDU timer with a {} msec timeout'.format(timeout))
+                logger.debug('RCV | start LAST_PDU timer with a {} msec timeout'.format(timeout))
                 self.start_last_pdu_delay_timer(timeout)
                 # Change state to RECEIVING_DATA
-                log.debug('RCV | IDLE - change state to RECEIVING_DATA')
+                logger.debug('RCV | IDLE - change state to RECEIVING_DATA')
                 self.tran(RxState.ReceivingData)
 
         elif ev["id"] == RxEvent.ExtraAddressPdu:
@@ -2405,9 +2410,9 @@ class RxContext():
             if len(self.dests) > 1: 
                 # Multicast - Wait random time before sending AckPdu
                 self.mcast_ack_timeout = round(random.random() * (len(self.dests) * ACK_PDU_DELAY_MSEC))
-                log.debug("RCV | start LAST_PDU timer with a {} msec timeout')".format(self.mcast_ack_timeout))
+                logger.debug("RCV | start LAST_PDU timer with a {} msec timeout')".format(self.mcast_ack_timeout))
                 self.start_last_pdu_delay_timer(self.mcast_ack_timeout)
-                log.debug("RCV | IDLE - Change state to RECEIVING_DATA")
+                logger.debug("RCV | IDLE - Change state to RECEIVING_DATA")
                 self.tran(RxState.ReceivingData)
             else:
                 # Unicast -> Send AckPdu
@@ -2415,11 +2420,11 @@ class RxContext():
                 missed = self.get_missing_fragments()
                 nbytes = self.send_ack(self.seqnohi, missed, self.tvalue, self.ts_val)
                 timeout = self.calc_ack_pdu_timeout(len(self.dests), self.rx_datarate)
-                log.debug("RCV | Start ACK_PDU timer with a {} msec timeout".format(timeout))
+                logger.debug("RCV | Start ACK_PDU timer with a {} msec timeout".format(timeout))
                 self.start_ack_pdu_timer(timeout)
                 # Change state to SENT_ACK
                 self.cwnd = 00  # Reset RxPhase - FIXME??*/
-                log.debug('RCV | RECEIVING_DATA - Change state to SENT_ACK')
+                logger.debug('RCV | RECEIVING_DATA - Change state to SENT_ACK')
                 self.tran(RxState.SentAck)
 
         elif ev["id"] == RxEvent.DataPdu:
@@ -2434,7 +2439,7 @@ class RxContext():
             self.ack_retry_count = 0
             self.log()
             # Change state to RECEIVING_DATA */
-            log.debug('RCV | change state to RECEIVING_DATA')
+            logger.debug('RCV | change state to RECEIVING_DATA')
             self.tran(RxState.ReceivingData)
         elif ev["id"] == RxEvent.LastPduTimeout:
             pass
@@ -2446,7 +2451,7 @@ class RxContext():
             pass
 
     async def state_RECEIVING_DATA(self, ev):
-        log.debug('RCV | state_RECEIVING_DATA: {}'.format(ev['id']))
+        logger.debug('RCV | state_RECEIVING_DATA: {}'.format(ev['id']))
 
         if ev["id"] == RxEvent.AddressPdu:
             self.cancel_last_pdu_delay_timer()
@@ -2475,7 +2480,7 @@ class RxContext():
                 # At multicast the AckPdu will be randomly delayed to avoid collisions
                 self.mcast_ack_timeout = round(random.random() * (len(self.dests) * ACK_PDU_DELAY_MSEC))
                 timeout += self.mcast_ack_timeout
-            log.debug('RCV | start LAST_PDU timer with a {} msec timeout'.format(timeout))
+            logger.debug('RCV | start LAST_PDU timer with a {} msec timeout'.format(timeout))
             self.start_last_pdu_delay_timer(timeout)
             
         elif ev["id"] == RxEvent.ExtraAddressPdu:
@@ -2492,7 +2497,7 @@ class RxContext():
             if len(self.dests) > 1: 
                 # Multicast - Wait random time before sending AckPdu
                 self.mcast_ack_timeout = round(random.random() * (len(self.dests) * ACK_PDU_DELAY_MSEC))
-                log.debug("RCV | start LAST_PDU timer with a {} msec timeout')".format(self.mcast_ack_timeout))
+                logger.debug("RCV | start LAST_PDU timer with a {} msec timeout')".format(self.mcast_ack_timeout))
                 self.start_last_pdu_delay_timer(self.mcast_ack_timeout)
             else:
                 # Unicast -> Immediately send AckPdu
@@ -2500,11 +2505,11 @@ class RxContext():
                 missed = self.get_missing_fragments()
                 nbytes = self.send_ack(self.seqnohi, missed, self.tvalue, self.ts_val)
                 timeout = self.calc_ack_pdu_timeout(len(self.dests), self.rx_datarate)
-                log.debug("RCV | Start ACK_PDU timer with a {} msec timeout".format(timeout))
+                logger.debug("RCV | Start ACK_PDU timer with a {} msec timeout".format(timeout))
                 self.start_ack_pdu_timer(timeout)
                 # Change state to SENT_ACK
                 self.cwnd = 00  # Reset RxPhase - FIXME??*/
-                log.debug('RCV | RECEIVING_DATA - Change state to SENT_ACK')
+                logger.debug('RCV | RECEIVING_DATA - Change state to SENT_ACK')
                 self.tran(RxState.SentAck)
 
         elif ev["id"] == RxEvent.DataPdu:
@@ -2523,7 +2528,7 @@ class RxContext():
             if self.cwnd > 0:
                 # Calculate how many data PDUs are still awaited
                 remaining = self.get_remaining_fragments(data_pdu.seqno)
-                log.debug('RCV | {} | Received DataPDU[{}] Remaining: {} RxDatarate: {} bit/s'.format(
+                logger.debug('RCV | {} | Received DataPDU[{}] Remaining: {} RxDatarate: {} bit/s'.format(
                     self.my_ipaddr, data_pdu.seqno, remaining, self.rx_datarate))
                 # Start LAST PDU Timer
                 remaining += 1 # Additional ExtrAddressPdu
@@ -2532,7 +2537,7 @@ class RxContext():
                     # At multicast the AckPdu will be randomly delayed to avoid collisions
                     self.mcast_ack_timeout = round(random.random() * (len(self.dests) * ACK_PDU_DELAY_MSEC))
                     timeout += self.mcast_ack_timeout
-                log.debug('RCV | start LAST_PDU timer with a {} msec timeout'.format(timeout))
+                logger.debug('RCV | start LAST_PDU timer with a {} msec timeout'.format(timeout))
                 self.start_last_pdu_delay_timer(timeout)
 
         elif ev["id"] == RxEvent.LastPduTimeout:
@@ -2545,11 +2550,11 @@ class RxContext():
             missed = self.get_missing_fragments()
             nbytes = self.send_ack(self.seqnohi, missed, self.tvalue, self.ts_val)
             timeout = self.calc_ack_pdu_timeout(len(self.dests), self.rx_datarate)
-            log.debug("RCV | Start ACK_PDU timer with a {} msec timeout".format(timeout))
+            logger.debug("RCV | Start ACK_PDU timer with a {} msec timeout".format(timeout))
             self.start_ack_pdu_timer(timeout)
             # Change state to SENT_ACK
             self.cwnd = 00  # Reset RxPhase - FIXME??*/
-            log.debug('RCV | RECEIVING_DATA - Change state to SENT_ACK')
+            logger.debug('RCV | RECEIVING_DATA - Change state to SENT_ACK')
             self.tran(RxState.SentAck)
         
         elif ev["id"] == RxEvent.AckPduTimeout:
@@ -2560,7 +2565,7 @@ class RxContext():
             pass
 
     async def state_SENT_ACK(self, ev):
-        log.debug('RCV | state_SENT_ACK: {}'.format(ev['id']))
+        logger.debug('RCV | state_SENT_ACK: {}'.format(ev['id']))
 
         if ev["id"] == RxEvent.AddressPdu:
             self.cancel_ack_pdu_timer();
@@ -2569,7 +2574,7 @@ class RxContext():
             to_me = address_pdu.find_addr(self.my_ipaddr)
             if to_me is False:
                 # Change state to FINISHED
-                log.debug('SND | change state to FINISHED')
+                logger.debug('SND | change state to FINISHED')
                 self.tran(RxState.Finished)
                 message = reassemble(self.fragments)
                 self.cli._on_finished(self.msid, message, self.remote_ipaddr)
@@ -2595,9 +2600,9 @@ class RxContext():
                 if len(self.dests) > 1: 
                     # Multicast - Wait random time before sending AckPdu
                     self.mcast_ack_timeout = round(random.random() * (len(self.dests) * ACK_PDU_DELAY_MSEC))
-                    log.debug("RCV | start LAST_PDU timer with a {} msec timeout')".format(self.mcast_ack_timeout))
+                    logger.debug("RCV | start LAST_PDU timer with a {} msec timeout')".format(self.mcast_ack_timeout))
                     self.start_last_pdu_delay_timer(self.mcast_ack_timeout)
-                    log.debug("RCV | IDLE - Change state to RECEIVING_DATA")
+                    logger.debug("RCV | IDLE - Change state to RECEIVING_DATA")
                     self.tran(RxState.ReceivingData)
                 else:
                     # Unicast -> Send AckPdu
@@ -2605,11 +2610,11 @@ class RxContext():
                     missed = self.get_missing_fragments()
                     nbytes = self.send_ack(self.seqnohi, missed, self.tvalue, self.ts_val)
                     timeout = self.calc_ack_pdu_timeout(len(self.dests), self.rx_datarate)
-                    log.debug("RCV | Start ACK_PDU timer with a {} msec timeout".format(timeout))
+                    logger.debug("RCV | Start ACK_PDU timer with a {} msec timeout".format(timeout))
                     self.start_ack_pdu_timer(timeout)
                     # Change state to SENT_ACK
                     self.cwnd = 00  # Reset RxPhase - FIXME??*/
-                    log.debug('RCV | RECEIVING_DATA - Change state to SENT_ACK')
+                    logger.debug('RCV | RECEIVING_DATA - Change state to SENT_ACK')
                     self.tran(RxState.SentAck)
             else:
                 # TrafficMode.Bulk - Start Last PDU Timer
@@ -2619,10 +2624,10 @@ class RxContext():
                     # At multicast the AckPdu will be randomly delayed to avoid collisions
                     self.mcast_ack_timeout = round(random.random() * (len(self.dests) * ACK_PDU_DELAY_MSEC))
                     timeout += self.mcast_ack_timeout
-                log.debug('RCV | start LAST_PDU timer with a {} msec timeout'.format(timeout))
+                logger.debug('RCV | start LAST_PDU timer with a {} msec timeout'.format(timeout))
                 self.start_last_pdu_delay_timer(timeout)
                 # Change state to RECEIVING_DATA
-                log.debug('RCV | IDLE - change state to RECEIVING_DATA')
+                logger.debug('RCV | IDLE - change state to RECEIVING_DATA')
                 self.tran(RxState.ReceivingData)
 
         elif ev["id"] == RxEvent.ExtraAddressPdu:
@@ -2651,7 +2656,7 @@ class RxContext():
             if self.cwnd > 0:
                 # Calculate how many data PDUs are still awaited
                 remaining = self.get_remaining_fragments(data_pdu.seqno)
-                log.debug('RX {} | Received DataPDU[{}] Remaining: {} RxDatarate: {} bit/s'.format(
+                logger.debug('RX {} | Received DataPDU[{}] Remaining: {} RxDatarate: {} bit/s'.format(
                     self.my_ipaddr, data_pdu.seqno, remaining, self.rx_datarate))
                 # Start LAST PDU Timer
                 remaining += 1 # Additional ExtrAddressPdu
@@ -2660,10 +2665,10 @@ class RxContext():
                     # At multicast the AckPdu will be randomly delayed to avoid collisions
                     self.mcast_ack_timeout = round(random.random() * (len(self.dests) * ACK_PDU_DELAY_MSEC))
                     timeout += self.mcast_ack_timeout
-                log.debug('RCV | start LAST_PDU timer with a {} msec timeout'.format(timeout))
+                logger.debug('RCV | start LAST_PDU timer with a {} msec timeout'.format(timeout))
                 self.start_last_pdu_delay_timer(timeout)
                 # Change state to RECEIVING_DATA
-                log.debug('RCV | IDLE - change state to RECEIVING_DATA')
+                logger.debug('RCV | IDLE - change state to RECEIVING_DATA')
                 self.tran(RxState.ReceivingData)
 
         elif ev["id"] == RxEvent.LastPduTimeout:
@@ -2672,16 +2677,16 @@ class RxContext():
         elif ev["id"] == RxEvent.AckPduTimeout:
             self.cancel_ack_pdu_timer()
             self.ack_retry_count += 1
-            log.debug("RCV | RetryCount: {} MaxRetryCount: {}".format(self.ack_retry_count, self.cfg["max_ack_retry_count"]))
+            logger.debug("RCV | RetryCount: {} MaxRetryCount: {}".format(self.ack_retry_count, self.cfg["max_ack_retry_count"]))
             if self.ack_retry_count > self.cfg["max_ack_retry_count"]:
-                log.debug("Aborted reception due: Maximum Ack retry count reached")
+                logger.debug("Aborted reception due: Maximum Ack retry count reached")
             else:
                 # Resend AckPdu
                 nbytes = self.send_ack(self.seqnohi, self.get_missing_fragments(), self.tvalue, self.ts_val)
                 timeout = self.calc_ack_pdu_timeout(len(self.dests), self.rx_datarate)
                 for i in range(0,self.ack_retry_count):
                     timeout = timeout * 2
-                log.debug("RCV | Start ACK_PDU timer with a {} msec timeout".format(timeout))
+                logger.debug("RCV | Start ACK_PDU timer with a {} msec timeout".format(timeout))
                 self.start_ack_pdu_timer(timeout)
 
         elif ev["id"] == RxEvent.ExpiryTimeout:
@@ -2690,7 +2695,7 @@ class RxContext():
             pass
 
     async def state_FINISHED(self, ev):
-        log.debug('RCV | state_FINISHED: {}'.format(ev['id']))
+        logger.debug('RCV | state_FINISHED: {}'.format(ev['id']))
         self.cancel_last_pdu_delay_timer()
         self.cancel_ack_pdu_timer()
 
@@ -2729,7 +2734,7 @@ class Server(asyncio.DatagramProtocol, chan.Observer):
             # Create socket
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            log.debug('socket listens to port {}'.format(self.dport))
+            logger.debug('socket listens to port {}'.format(self.dport))
             self.sock.bind(('', self.dport))
             #mreq = struct.pack("=4sl", socket.inet_aton(mcast_ipaddr), socket.INADDR_ANY)
             #self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
@@ -2741,22 +2746,22 @@ class Server(asyncio.DatagramProtocol, chan.Observer):
 
     async def sendto(self, message, dst_addresses):
         if self.channel is not None:
-            log.debug('send message over wireless channel'.format(self.mcast_ipaddr, self.aport))
+            logger.debug('send message over wireless channel'.format(self.mcast_ipaddr, self.aport))
             self.channel.sendto(self.mcast_ipaddr, message)
         else:
-            log.debug('send message to addr {} port {}'.format(self.mcast_ipaddr, self.aport))
+            logger.debug('send message to addr {} port {}'.format(self.mcast_ipaddr, self.aport))
             self.transport.sendto(message.encode(), (self.mcast_ipaddr, self.aport))
 
     def connection_made(self, transport):
         self.transport = transport
-        log.debug('Connection is made:')
+        logger.debug('Connection is made:')
 
     def notify(self, message, addr):
-        #log.debug("P_MUL Server received message of len {} from {}".format(len(message), addr))
+        #logger.debug("P_MUL Server received message of len {} from {}".format(len(message), addr))
         self.datagram_received(message, addr)
 
     def _on_finished(self, msid, message, src_addr):
-        log.debug('RCV | Received message {} of len {} from {}'.format(msid, len(message), src_addr))
+        logger.debug('RCV | Received message {} of len {} from {}'.format(msid, len(message), src_addr))
         self.observer.message_received(message, src_addr)
 
     def _on_data_pdu(self, data, remote): 
@@ -2773,7 +2778,7 @@ class Server(asyncio.DatagramProtocol, chan.Observer):
 
             # A new RxContext needs to be initialized
             #ctx = RxContext(self, self.loop, cfg, self.src_ipaddr, remote_ipaddr, data_pdu.msid)
-            #log.info("created context {}".format(key))
+            #logger.info("created context {}".format(key))
             #self.rx_contexts[key] = ctx
             #ev = dict()
             #ev['id'] = RxEvent.DataPdu
@@ -2807,12 +2812,12 @@ class Server(asyncio.DatagramProtocol, chan.Observer):
             # If its own ID is not in the list of Destination_Entries, 
             # the receiving node shall discard the Address_PDU
             if  address_pdu.find_addr(self.src_ipaddr) == False:
-                #log.debug('RX Silently discard AddressPdu - I am not addressed')
+                #logger.debug('RX Silently discard AddressPdu - I am not addressed')
                 return
             # A new RxContext needs to be initialized
             address_pdu.log("RCV")
             ctx = RxContext(self, self.loop, cfg, self.src_ipaddr, address_pdu.src_ipaddr, address_pdu.msid)
-            #log.info("created context {}".format(key))
+            #logger.info("created context {}".format(key))
             self.rx_contexts[key] = ctx
             ev = dict()
             ev['id'] = event_id
@@ -2832,7 +2837,7 @@ class Server(asyncio.DatagramProtocol, chan.Observer):
         pdu.from_buffer(data[:MINIMUM_PACKET_LEN])
         #pdu.log("RX")
 
-        log.debug("RX Received packet from {} type: {} len:{}".format(addr, pdu.type, pdu.len))
+        logger.debug("RX Received packet from {} type: {} len:{}".format(addr, pdu.type, pdu.len))
 
         if pdu.type == int(PduType.Address):
             self._on_address_pdu(data, addr)
@@ -2848,10 +2853,10 @@ class Server(asyncio.DatagramProtocol, chan.Observer):
             print("Received unkown PDU type {}".format(pdu.type))
 
     def error_received(self, exc):
-        log.debug('Error received:', exc)
+        logger.debug('Error received:', exc)
 
     def connection_lost(self, exc):
-        log.debug("Socket closed, stop the event loop")
+        logger.debug("Socket closed, stop the event loop")
         loop = asyncio.get_event_loop()
         loop.stop()
 
@@ -2942,6 +2947,7 @@ class PmulTransport(StatusObserver):
     async def sendto(self, message_buf, dst_ipaddrs):
         future = asyncio.Future()
         if len(message_buf) < self.__min_bulk_size:
+            logger.debug("send a message to {}".format(dst_ipaddrs))
             asyncio.ensure_future(self.__client.send_message(message_buf, dst_ipaddrs, self.__node_info, future=future))
         else:
             asyncio.ensure_future(self.__client.send_bulk(message_buf, dst_ipaddrs, self.__node_info, future=future))
@@ -2953,13 +2959,13 @@ class PmulTransport(StatusObserver):
 #
 class PmulProtocol():
     def connection_made(self, transport):
-        log.debug('P_MUL protocol is ready')
+        logger.debug('P_MUL protocol is ready')
 
     def data_received(self, data, addr):
-        log.debug("Received a data from {}".format(addr))
+        logger.debug("Received a data from {}".format(addr))
 
     def delivery_completed(self, msid, delivery_status, ack_status):
-        log.debug('Delivery of Message-ID {} finished with {} {}'.format(msid, delivery_status, ack_status))
+        logger.debug('Delivery of Message-ID {} finished with {} {}'.format(msid, delivery_status, ack_status))
 
 def conf_init():
     conf = dict()
