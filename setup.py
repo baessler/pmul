@@ -2,7 +2,7 @@ from distutils.core import setup
 setup(
   name = 'pmul',
   packages = ['pmul'], # this must be the same as the name above
-  version = '0.1',
+  version = '0.2',
   description = 'An implementation of the P_MUL protocol in python',
   author = 'Andreas Baessler',
   author_email = 'a_baessler@web.de',
