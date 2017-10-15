@@ -7,7 +7,7 @@ setup(
   author = 'Andreas Baessler',
   author_email = 'a_baessler@web.de',
   url = 'https://github.com/baessler/pmul', # use the URL to the github repo
-  download_url = 'https://github.com/baessler/pmul/archive/0.1.tar.gz', # I'll explain this in a second
+  download_url = 'https://github.com/baessler/pmul/archive/0.2.tar.gz', # I'll explain this in a second
   keywords = ['p_mul', 'pmul', 'transport', 'protocol', 'multicast', 'udp'], # arbitrary keywords
   classifiers = [],
 )
