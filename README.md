@@ -12,15 +12,33 @@ Usage
 import pmul
 import asyncio
 
-local_ipaddr = '127.0.0.1'
-mcast_ipaddr = '225.0.0.1'
-mcast_ttl = 1
-data_port = 2740
-ack_port = 2741
+class ClientProtocol(pmul.PmulProtocol):
+    def __init__(self, conf):
+        self.__conf = conf
+
+    def connection_made(self, transport):
+        self.transport = transport
+        print('P_MUL protocol is ready')
+        
+    def data_received(self, data, addr):
+        print("Received data from {}".format(addr))
+
+    def delivery_completed(self, msid, delivery_status, ack_status):
+        print('Delivery of Message-ID {} finished with {} {}'.format(msid, delivery_status, ack_status))
+
+    async def sendto(self, dest, msglen):
+        message = 'a';
+        for i in range(0,msglen):
+            message += 'a'
+        bulk_data = message.encode("ascii")
+        await self.transport.sendto(bulk_data, [dest])
+        print("Finished delivery of message of len {}".format(msglen))
 
 loop = asyncio.get_event_loop()
-pmul = pmul.Pmul(local_ipaddr, mcast_ipaddr, mcast_ttl, data_port, ack_port, loop=loop)
-loop.run_until_complete(pmul.sendto("abcd".encode("ascii"), ["198.18.10.1"]))
+conf = pmul.conf_init()
+coro = pmul.create_pmul_endpoint(ClientProtocol, loop, conf);
+protocol, transport = loop.run_until_complete(coro)
+loop.run_until_complete(protocol.sendto("127.0.0.1", 5000))
 loop.close()
 ```
 

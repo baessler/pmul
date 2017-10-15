@@ -14,8 +14,6 @@ import logging
 import random
 import airchannel as chan
 
-#log = logger.getLogger('pmul')
-#logger.setLevel(logger.DEBUG)
 logger = logging.getLogger('pmul')
 fh = logging.FileHandler('pmul.log')
 logger.addHandler(fh)
@@ -428,7 +426,7 @@ class AddressPdu():
 
     def log(self, rxtx):
         logger.debug('{} *** {} *************************************************'.format(rxtx, self.type))
-        logger.debug('{} * total:{} wnd:{} seqnohi:{} srcid:{} msid:{} expires:{} rsvlen:{}'.format(
+        logger.debug('{} * total:{} wnd:{} seqnoh:{} srcid:{} msid:{} expires:{} rsvlen:{}'.format(
             rxtx, self.total, self.cwnd, self.seqnohi, self.src_ipaddr, self.msid, self.expires, self.rsvlen))
         for i, val in enumerate(self.dst_entries):
             logger.debug('{} * dst[{}] dstid:{} seqno:{}'.format(rxtx, i, val.dest_ipaddr, val.seqno))
@@ -1538,6 +1536,7 @@ class TxContext():
                 self.start_pdu_delay_timer(MIN_PDU_DELAY)
                 logger.debug('SND | IDLE - Change state to SENDING_DATA')
                 self.tran(TxState.SendingData)
+
         elif ev["id"] == TxEvent.Abort:
             pass
         elif ev["id"] == TxEvent.AckPdu:
@@ -2628,6 +2627,7 @@ class RxContext():
                 self.start_last_pdu_delay_timer(timeout)
                 # Change state to RECEIVING_DATA
                 logger.debug('RCV | IDLE - change state to RECEIVING_DATA')
+
                 self.tran(RxState.ReceivingData)
 
         elif ev["id"] == RxEvent.ExtraAddressPdu:
@@ -2840,6 +2840,7 @@ class Server(asyncio.DatagramProtocol, chan.Observer):
         logger.debug("RX Received packet from {} type: {} len:{}".format(addr, pdu.type, pdu.len))
 
         if pdu.type == int(PduType.Address):
+            logging.debug("Received address PDU")
             self._on_address_pdu(data, addr)
         elif pdu.type == int(PduType.ExtraAddress):
             self._on_address_pdu(data, addr)
@@ -2902,7 +2903,7 @@ class PmulTransport(StatusObserver):
         # node_info['retry_timeout']    := For retry-timeout for single-message transmission
         # node_info['ack_timeout']      := Transmission time of AckPDU (Time between sending Ack and Receiving it)
         self.__node_info = dict()
-        print("created transport protocol")
+        logging.error("created transport protocol")
 
         self.__client = Client(loop, self, self.__conf);        
         self.__server = Server(loop, self, self.__conf);
