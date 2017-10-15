@@ -115,14 +115,6 @@ class Traffic(Enum):
     Bulk = 1
 
 ################################################################################
-## Observer class definitions
-##
-
-class Observer():
-    def notify(self, ev_name, param):
-        print('received trap data ' + str(param))
-
-################################################################################
 ## Exception class definitions
 ##
 
@@ -1948,7 +1940,7 @@ class Client(asyncio.DatagramProtocol, chan.Observer):
         self.tx_ctx_list = dict()   # List of TX Sessions. Each session has a unique Message ID */
 
         if self.channel_port > 0:
-            self.channel = chan.WirelessChannelClient(loop, self, self.src_ipaddr, self.aport, self.channel_port)
+            self.channel = pmul.WirelessChannelClient(loop, self, self.src_ipaddr, self.aport, self.channel_port)
         else:
             self.channel = None
             # Create socket
@@ -2728,7 +2720,7 @@ class Server(asyncio.DatagramProtocol, chan.Observer):
         self.rx_contexts = dict()
 
         if self.channel_port > 0:
-            self.channel = chan.WirelessChannelClient(loop, self, self.src_ipaddr, self.dport, self.channel_port)
+            self.channel = pmul.WirelessChannelClient(loop, self, self.src_ipaddr, self.dport, self.channel_port)
         else:
             self.channel = None
             # Create socket
