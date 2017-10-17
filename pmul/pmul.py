@@ -15,9 +15,7 @@ import random
 from . import airchannel as chan
 
 logger = logging.getLogger('pmul')
-fh = logging.FileHandler('pmul.log')
-logger.addHandler(fh)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.ERROR)
 
 ################################################################################
 ## TODOs
@@ -2832,7 +2830,7 @@ class Server(asyncio.DatagramProtocol, chan.Observer):
         logger.debug("RX Received packet from {} type: {} len:{}".format(addr, pdu.type, pdu.len))
 
         if pdu.type == int(PduType.Address):
-            logging.debug("Received address PDU")
+            logger.debug("Received address PDU")
             self._on_address_pdu(data, addr)
         elif pdu.type == int(PduType.ExtraAddress):
             self._on_address_pdu(data, addr)
@@ -2895,7 +2893,17 @@ class PmulTransport(StatusObserver):
         # node_info['retry_timeout']    := For retry-timeout for single-message transmission
         # node_info['ack_timeout']      := Transmission time of AckPDU (Time between sending Ack and Receiving it)
         self.__node_info = dict()
-        logging.error("created transport protocol")
+
+        # Create logging system
+        if conf['logfile'] is not 'stdout':
+            fh = logging.FileHandler(conf['logfile'])
+            logger.addHandler(fh)
+        if conf['loglevel'] is 'debug':
+            logger.setLevel(logging.DEBUG)
+        else:
+            logger.setLevel(logging.ERROR)
+
+        logger.error("created transport protocol")
 
         self.__client = Client(loop, self, self.__conf);        
         self.__server = Server(loop, self, self.__conf);
@@ -2969,6 +2977,8 @@ def conf_init():
     conf["aport"]           = 2741
     conf["chan_cli_port"]   = 0      # Optional: Only used for network emulation
     conf["chan_srv_port"]   = 0      # Optional: Only used for network emulation
+    conf["loglevel"]        = "debug"
+    conf["logfile"]         = "stdout"
     return conf
 
 async def create_pmul_endpoint(protocol_factory, loop, conf):           
